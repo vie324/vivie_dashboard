@@ -11,7 +11,7 @@
     <!-- Google Fonts (非ブロッキング) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Shippori+Mincho:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=Shippori+Mincho:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'">
     <!-- Phosphor Icons (for Treatment Report) -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
@@ -12469,6 +12469,675 @@
             );
         };
 
+
+        // ==========================================
+        // 肌分析ツール: 型定義・ゾーン・ユーティリティ
+        // ==========================================
+
+        const FACE_ZONES = [
+            { key: 'forehead', label: '額', x: 0.3, y: 0.08, w: 0.4, h: 0.15, color: '#FF6B6B' },
+            { key: 'leftCheek', label: '左頬', x: 0.08, y: 0.38, w: 0.25, h: 0.22, color: '#4ECDC4' },
+            { key: 'rightCheek', label: '右頬', x: 0.67, y: 0.38, w: 0.25, h: 0.22, color: '#45B7D1' },
+            { key: 'nose', label: '鼻', x: 0.38, y: 0.32, w: 0.24, h: 0.25, color: '#96CEB4' },
+            { key: 'chin', label: '顎', x: 0.32, y: 0.72, w: 0.36, h: 0.16, color: '#FFEAA7' },
+            { key: 'underEyeL', label: '左目元', x: 0.15, y: 0.3, w: 0.18, h: 0.1, color: '#DDA0DD' },
+            { key: 'underEyeR', label: '右目元', x: 0.67, y: 0.3, w: 0.18, h: 0.1, color: '#B19CD9' },
+        ];
+
+        const SA_GRADE_CONFIG = {
+            excellent: { label: '優秀', color: '#2E7D32', bg: '#E8F5E9', min: 80 },
+            good: { label: '良好', color: '#558B2F', bg: '#F1F8E9', min: 65 },
+            caution: { label: '注意', color: '#F9A825', bg: '#FFFDE7', min: 45 },
+            warning: { label: '要改善', color: '#E65100', bg: '#FFF3E0', min: 0 },
+        };
+
+        const SA_METRICS = [
+            { key: 'uniformity', label: '色ムラ・くすみ', icon: 'palette', desc: '肌色の均一性と透明感を評価します' },
+            { key: 'redness', label: '赤み・炎症', icon: 'flame', desc: '炎症や赤みの程度を評価します' },
+            { key: 'texture', label: '毛穴・キメ', icon: 'scan', desc: '肌表面のなめらかさを評価します' },
+            { key: 'pigment', label: 'シミ・色素沈着', icon: 'sun', desc: '色素沈着やシミの程度を評価します' },
+            { key: 'firmness', label: 'ハリ・たるみ', icon: 'move', desc: '輪郭の左右対称性を評価します' },
+            { key: 'moisture', label: '水分・油分', icon: 'droplets', desc: '推定うるおいバランスを評価します' },
+        ];
+
+        const saGetGrade = (score) => {
+            if (score >= 80) return SA_GRADE_CONFIG.excellent;
+            if (score >= 65) return SA_GRADE_CONFIG.good;
+            if (score >= 45) return SA_GRADE_CONFIG.caution;
+            return SA_GRADE_CONFIG.warning;
+        };
+
+        // Color utils
+        const saRgbToHsl = (r, g, b) => {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h = 0, s = 0, l = (max + min) / 2;
+            if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+                    case g: h = ((b - r) / d + 2) / 6; break;
+                    case b: h = ((r - g) / d + 4) / 6; break;
+                }
+            }
+            return { h: h * 360, s: s * 100, l: l * 100 };
+        };
+
+        const saGetPixelsInZone = (imageData, zone, ovalCx, ovalCy, ovalRx, ovalRy) => {
+            const pixels = [];
+            const zoneX = Math.round(ovalCx - ovalRx + zone.x * 2 * ovalRx);
+            const zoneY = Math.round(ovalCy - ovalRy + zone.y * 2 * ovalRy);
+            const zoneW = Math.round(zone.w * 2 * ovalRx);
+            const zoneH = Math.round(zone.h * 2 * ovalRy);
+            const w = imageData.width;
+            const data = imageData.data;
+            for (let y = zoneY; y < zoneY + zoneH && y < imageData.height; y++) {
+                for (let x = zoneX; x < zoneX + zoneW && x < w; x++) {
+                    // Check if inside ellipse
+                    const dx = (x - ovalCx) / ovalRx;
+                    const dy = (y - ovalCy) / ovalRy;
+                    if (dx * dx + dy * dy <= 1) {
+                        const i = (y * w + x) * 4;
+                        if (i >= 0 && i < data.length - 2) {
+                            pixels.push({ r: data[i], g: data[i + 1], b: data[i + 2] });
+                        }
+                    }
+                }
+            }
+            return pixels;
+        };
+
+        // ==========================================
+        // 肌分析ツール: スコアリングエンジン
+        // ==========================================
+
+        const saAnalyzeUniformity = (pixels) => {
+            if (pixels.length === 0) return 50;
+            const hsls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b));
+            const ls = hsls.map(h => h.l);
+            const ss = hsls.map(h => h.s);
+            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
+            const meanS = ss.reduce((a, b) => a + b, 0) / ss.length;
+            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
+            const uniformScore = Math.max(0, 100 - sdL * 4);
+            const brightnessScore = Math.max(0, 100 - Math.abs(meanL - 60) * 2);
+            const satScore = Math.max(0, 100 - Math.abs(meanS - 25) * 3);
+            return Math.max(0, Math.min(100, uniformScore * 0.5 + brightnessScore * 0.3 + satScore * 0.2));
+        };
+
+        const saAnalyzeRedness = (pixels) => {
+            if (pixels.length === 0) return 50;
+            let redCount = 0;
+            let totalExcess = 0;
+            pixels.forEach(p => {
+                const sum = p.r + p.g + p.b;
+                if (sum === 0) return;
+                const rRatio = p.r / sum;
+                const excess = p.r - (p.g + p.b) / 2;
+                totalExcess += excess;
+                if (rRatio > 0.42 && excess > 15) redCount++;
+            });
+            const redRatio = redCount / pixels.length;
+            const avgExcess = totalExcess / pixels.length;
+            return Math.max(0, Math.min(100, 100 - redRatio * 200 - Math.max(0, avgExcess) * 1.5));
+        };
+
+        const saAnalyzeTexture = (pixels) => {
+            if (pixels.length < 9) return 50;
+            const grays = pixels.map(p => 0.299 * p.r + 0.587 * p.g + 0.114 * p.b);
+            const side = Math.floor(Math.sqrt(grays.length));
+            if (side < 3) return 50;
+            let edgeSum = 0, edgeCount = 0;
+            for (let y = 1; y < side - 1; y++) {
+                for (let x = 1; x < side - 1; x++) {
+                    const idx = y * side + x;
+                    const lap = grays[idx - 1] + grays[idx + 1] + grays[idx - side] + grays[idx + side] - 4 * grays[idx];
+                    edgeSum += Math.abs(lap);
+                    edgeCount++;
+                }
+            }
+            const avgEdge = edgeCount > 0 ? edgeSum / edgeCount : 0;
+            return Math.max(0, Math.min(100, 100 - avgEdge * 2.5));
+        };
+
+        const saAnalyzePigmentation = (pixels) => {
+            if (pixels.length === 0) return 50;
+            const ls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b).l);
+            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
+            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
+            const threshold = meanL - 1.5 * sdL;
+            const darkCount = ls.filter(l => l < threshold).length;
+            const darkRatio = darkCount / ls.length;
+            return Math.max(0, Math.min(100, 100 - darkRatio * 500));
+        };
+
+        const saAnalyzeFirmness = (leftPixels, rightPixels) => {
+            if (leftPixels.length === 0 || rightPixels.length === 0) return 50;
+            const avgL = (px) => px.reduce((s, p) => s + saRgbToHsl(p.r, p.g, p.b).l, 0) / px.length;
+            const avgR = (px) => px.reduce((s, p) => s + p.r, 0) / px.length;
+            const lDiff = Math.abs(avgL(leftPixels) - avgL(rightPixels));
+            const rDiff = Math.abs(avgR(leftPixels) - avgR(rightPixels));
+            return Math.max(0, Math.min(100, 100 - lDiff * 3 - rDiff * 0.5));
+        };
+
+        const saAnalyzeMoisture = (pixels) => {
+            if (pixels.length === 0) return 50;
+            const ls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b).l);
+            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
+            const shinyCount = ls.filter(l => l > meanL + 25).length;
+            const shinyRatio = shinyCount / ls.length;
+            const oilScore = Math.max(0, 100 - shinyRatio * 400);
+            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
+            const smoothScore = Math.max(0, 100 - sdL * 3);
+            return Math.max(0, Math.min(100, smoothScore * 0.6 + oilScore * 0.4));
+        };
+
+        const saRunFullAnalysis = (imageData, canvasW, canvasH) => {
+            const cx = canvasW / 2, cy = canvasH / 2;
+            const rx = canvasW * 0.32, ry = canvasH * 0.42;
+            // Extract pixels for all zones
+            const zonePixels = {};
+            FACE_ZONES.forEach(z => {
+                zonePixels[z.key] = saGetPixelsInZone(imageData, z, cx, cy, rx, ry);
+            });
+            const allPixels = Object.values(zonePixels).flat();
+            const bothCheeks = [...(zonePixels.leftCheek || []), ...(zonePixels.rightCheek || [])];
+            const tZone = [...(zonePixels.forehead || []), ...(zonePixels.nose || [])];
+
+            const analyzePerZone = (fn, keys) => {
+                const zones = {};
+                keys.forEach(k => { zones[k] = fn(zonePixels[k] || []); });
+                return zones;
+            };
+
+            const uniformityScore = saAnalyzeUniformity(allPixels);
+            const rednessScore = saAnalyzeRedness(allPixels);
+            const textureScore = saAnalyzeTexture(bothCheeks);
+            const pigmentScore = saAnalyzePigmentation(allPixels);
+            const firmnessScore = saAnalyzeFirmness(zonePixels.leftCheek || [], zonePixels.rightCheek || []);
+            const moistureScore = saAnalyzeMoisture(allPixels);
+
+            const metrics = {
+                uniformity: { score: Math.round(uniformityScore), grade: saGetGrade(uniformityScore).label === '優秀' ? 'excellent' : saGetGrade(uniformityScore).label === '良好' ? 'good' : saGetGrade(uniformityScore).label === '注意' ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeUniformity, ['forehead','leftCheek','rightCheek','nose']) },
+                redness: { score: Math.round(rednessScore), grade: rednessScore >= 80 ? 'excellent' : rednessScore >= 65 ? 'good' : rednessScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeRedness, ['forehead','leftCheek','rightCheek','nose']) },
+                texture: { score: Math.round(textureScore), grade: textureScore >= 80 ? 'excellent' : textureScore >= 65 ? 'good' : textureScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeTexture, ['leftCheek','rightCheek','forehead']) },
+                pigment: { score: Math.round(pigmentScore), grade: pigmentScore >= 80 ? 'excellent' : pigmentScore >= 65 ? 'good' : pigmentScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzePigmentation, ['forehead','leftCheek','rightCheek']) },
+                firmness: { score: Math.round(firmnessScore), grade: firmnessScore >= 80 ? 'excellent' : firmnessScore >= 65 ? 'good' : firmnessScore >= 45 ? 'caution' : 'warning', zones: { leftCheek: Math.round(saAnalyzeUniformity(zonePixels.leftCheek || [])), rightCheek: Math.round(saAnalyzeUniformity(zonePixels.rightCheek || [])), underEyeL: Math.round(saAnalyzeUniformity(zonePixels.underEyeL || [])), underEyeR: Math.round(saAnalyzeUniformity(zonePixels.underEyeR || [])) } },
+                moisture: { score: Math.round(moistureScore), grade: moistureScore >= 80 ? 'excellent' : moistureScore >= 65 ? 'good' : moistureScore >= 45 ? 'caution' : 'warning', zones: { tZone: Math.round(saAnalyzeMoisture(tZone)), uZone: Math.round(saAnalyzeMoisture(bothCheeks)) } },
+            };
+
+            const totalScore = Math.round(Object.values(metrics).reduce((s, m) => s + m.score, 0) / 6);
+            return { metrics, totalScore, timestamp: new Date().toISOString() };
+        };
+
+        // ==========================================
+        // 肌分析ツール: サブコンポーネント
+        // ==========================================
+
+        const SAScoreCircle = ({ score, size = 160, label = '総合スコア' }) => {
+            const radius = (size - 16) / 2;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (score / 100) * circumference;
+            const grade = saGetGrade(score);
+            return (
+                <div className="flex flex-col items-center">
+                    <svg width={size} height={size} className="transform -rotate-90">
+                        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f0ebe6" strokeWidth="10" />
+                        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={grade.color} strokeWidth="10"
+                            strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset}
+                            style={{transition:'stroke-dashoffset 1.2s ease-out'}} />
+                    </svg>
+                    <div className="absolute flex flex-col items-center justify-center" style={{width:size,height:size}}>
+                        <span className="text-4xl font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{score}</span>
+                        <span className="text-xs font-bold mt-1" style={{color:grade.color}}>{grade.label}</span>
+                    </div>
+                    <p className="text-xs mt-2" style={{color:'#a87e5a'}}>{label}</p>
+                </div>
+            );
+        };
+
+        const SAMetricCard = ({ metric, result, isExpanded, onToggle }) => {
+            const grade = saGetGrade(result.score);
+            return (
+                <div className="border rounded-xl overflow-hidden transition-all cursor-pointer hover:shadow-md" style={{borderColor:'#e8e0d8',background:'#fff'}} onClick={onToggle}>
+                    <div className="flex items-center p-4 gap-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{background:'#faf7f4'}}>
+                            <Icon name={metric.icon} size={18} style={{color:'#a87e5a'}} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold" style={{color:'#2c2420'}}>{metric.label}</p>
+                            <p className="text-[10px]" style={{color:'#a09080'}}>{metric.desc}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:grade.bg,color:grade.color}}>{grade.label}</span>
+                            <span className="text-lg font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{result.score}</span>
+                            <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} style={{color:'#c0b0a0'}} />
+                        </div>
+                    </div>
+                    {isExpanded && result.zones && (
+                        <div className="px-4 pb-4 pt-0 border-t" style={{borderColor:'#f0ebe6'}}>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
+                                {Object.entries(result.zones).map(([zoneKey, zoneScore]) => {
+                                    const zone = FACE_ZONES.find(z => z.key === zoneKey);
+                                    const zGrade = saGetGrade(Math.round(zoneScore));
+                                    return (
+                                        <div key={zoneKey} className="text-center p-2 rounded-lg" style={{background:zGrade.bg}}>
+                                            <p className="text-[10px] font-bold" style={{color:'#706050'}}>{zone ? zone.label : zoneKey}</p>
+                                            <p className="text-lg font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:zGrade.color}}>{Math.round(zoneScore)}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SAFaceGuideOverlay = ({ width, height, showZones = true }) => {
+            const cx = width / 2, cy = height / 2;
+            const rx = width * 0.32, ry = height * 0.42;
+            return (
+                <svg width={width} height={height} className="absolute inset-0 pointer-events-none">
+                    <defs>
+                        <mask id="sa-oval-mask">
+                            <rect width={width} height={height} fill="white" />
+                            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="black" />
+                        </mask>
+                    </defs>
+                    <rect width={width} height={height} fill="rgba(0,0,0,0.45)" mask="url(#sa-oval-mask)" />
+                    <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="#a87e5a" strokeWidth="2" strokeDasharray="8 4" opacity="0.8" />
+                    {showZones && FACE_ZONES.map(z => {
+                        const zx = cx - rx + z.x * 2 * rx;
+                        const zy = cy - ry + z.y * 2 * ry;
+                        const zw = z.w * 2 * rx;
+                        const zh = z.h * 2 * ry;
+                        return (
+                            <g key={z.key}>
+                                <rect x={zx} y={zy} width={zw} height={zh} rx={4} fill={z.color} opacity={0.25} stroke={z.color} strokeWidth={1} strokeOpacity={0.5} />
+                                <text x={zx + zw/2} y={zy + zh/2 + 4} textAnchor="middle" fill="white" fontSize={10} fontWeight="bold" style={{textShadow:'0 1px 2px rgba(0,0,0,0.5)'}}>{z.label}</text>
+                            </g>
+                        );
+                    })}
+                    <text x={cx} y={30} textAnchor="middle" fill="white" fontSize={13} fontWeight="bold" style={{textShadow:'0 1px 3px rgba(0,0,0,0.6)'}}>ガイド枠に顔を合わせてください</text>
+                </svg>
+            );
+        };
+
+        const SARadarChart = ({ metrics }) => {
+            const { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } = Recharts;
+            const data = SA_METRICS.map(m => ({ subject: m.label.split('・')[0], score: metrics[m.key]?.score || 0, fullMark: 100 }));
+            return (
+                <ResponsiveContainer width="100%" height={240}>
+                    <RadarChart data={data} outerRadius="75%">
+                        <PolarGrid stroke="#e8e0d8" />
+                        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: '#706050' }} />
+                        <Radar dataKey="score" stroke="#a87e5a" fill="#c4956a" fillOpacity={0.3} strokeWidth={2} />
+                        <Tooltip formatter={(v) => [v + '点', 'スコア']} contentStyle={{fontSize:12,borderRadius:8,border:'1px solid #e8e0d8'}} />
+                    </RadarChart>
+                </ResponsiveContainer>
+            );
+        };
+
+        // ==========================================
+        // 肌分析ツール: ResultsView
+        // ==========================================
+
+        const SAResultsView = ({ result, imageDataUrl, onRetry }) => {
+            const [expandedMetric, setExpandedMetric] = useState(null);
+            const grade = saGetGrade(result.totalScore);
+            const getAdvice = (score) => {
+                if (score >= 80) return '素晴らしい肌状態です。現在のケアを継続しましょう。';
+                if (score >= 65) return '良好な状態です。気になるポイントを重点ケアで改善できます。';
+                if (score >= 45) return '改善の余地があります。プロのアドバイスを参考にケアを見直しましょう。';
+                return '専門的なケアをおすすめします。サロンでのトリートメントが効果的です。';
+            };
+
+            return (
+                <div className="h-full overflow-y-auto" style={{background:'#faf7f4'}}>
+                    <div className="max-w-2xl mx-auto p-4 md:p-6 pb-20">
+                        {/* Header */}
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-light tracking-wider mb-1" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>Analysis Result</h2>
+                            <p className="text-xs" style={{color:'#a09080'}}>{new Date(result.timestamp).toLocaleString('ja-JP')}</p>
+                        </div>
+
+                        {/* Image with zone overlay */}
+                        {imageDataUrl && (
+                            <div className="relative mx-auto mb-6 rounded-2xl overflow-hidden shadow-lg" style={{maxWidth:360}}>
+                                <img src={imageDataUrl} alt="分析画像" className="w-full" style={{transform:'scaleX(-1)'}} />
+                                <div className="absolute inset-0">
+                                    {(() => {
+                                        const w = 360, h = 480;
+                                        const cx = w/2, cy = h/2, rx = w*0.32, ry = h*0.42;
+                                        return FACE_ZONES.map(z => {
+                                            const zx = cx - rx + z.x * 2 * rx;
+                                            const zy = cy - ry + z.y * 2 * ry;
+                                            const zw = z.w * 2 * rx;
+                                            const zh = z.h * 2 * ry;
+                                            return (
+                                                <div key={z.key} className="absolute rounded" style={{
+                                                    left: `${(zx/w)*100}%`, top: `${(zy/h)*100}%`,
+                                                    width: `${(zw/w)*100}%`, height: `${(zh/h)*100}%`,
+                                                    background: z.color + '30', border: `1px solid ${z.color}60`,
+                                                }}>
+                                                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white" style={{textShadow:'0 1px 2px rgba(0,0,0,0.5)'}}>{z.label}</span>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Score + Radar side by side */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border flex flex-col items-center justify-center relative" style={{borderColor:'#e8e0d8'}}>
+                                <SAScoreCircle score={result.totalScore} />
+                                <p className="text-sm mt-3 text-center px-4" style={{color:'#706050',lineHeight:'1.6'}}>{getAdvice(result.totalScore)}</p>
+                            </div>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{borderColor:'#e8e0d8'}}>
+                                <p className="text-xs font-bold text-center mb-2" style={{color:'#a87e5a'}}>バランスチャート</p>
+                                <SARadarChart metrics={result.metrics} />
+                            </div>
+                        </div>
+
+                        {/* Metric Cards */}
+                        <div className="space-y-3 mb-6">
+                            <h3 className="text-sm font-bold flex items-center gap-2" style={{color:'#2c2420'}}>
+                                <Icon name="list" size={16} style={{color:'#a87e5a'}} /> 項目別スコア
+                            </h3>
+                            {SA_METRICS.map(m => (
+                                <SAMetricCard key={m.key} metric={m} result={result.metrics[m.key]}
+                                    isExpanded={expandedMetric === m.key}
+                                    onToggle={() => setExpandedMetric(expandedMetric === m.key ? null : m.key)} />
+                            ))}
+                        </div>
+
+                        {/* Grade Legend */}
+                        <div className="bg-white rounded-2xl p-4 shadow-sm border mb-6" style={{borderColor:'#e8e0d8'}}>
+                            <p className="text-xs font-bold mb-3" style={{color:'#706050'}}>グレード凡例</p>
+                            <div className="flex flex-wrap gap-3">
+                                {Object.entries(SA_GRADE_CONFIG).map(([key, cfg]) => (
+                                    <div key={key} className="flex items-center gap-1.5">
+                                        <div className="w-3 h-3 rounded-full" style={{background:cfg.color}}></div>
+                                        <span className="text-xs" style={{color:'#706050'}}>{cfg.label} ({cfg.min}+)</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Disclaimer */}
+                        <div className="rounded-xl p-4 mb-6" style={{background:'#f5f0eb',border:'1px solid #e8e0d8'}}>
+                            <p className="text-[10px] leading-relaxed" style={{color:'#a09080'}}>
+                                ※ 本分析はカウンセリング補助を目的としており、医療診断ではありません。
+                                撮影環境（照明・カメラ）によりスコアが変動する場合があります。
+                                施術前後の比較には同一環境での撮影を推奨します。
+                            </p>
+                        </div>
+
+                        {/* Retry Button */}
+                        <div className="text-center">
+                            <button onClick={onRetry} className="px-8 py-3 rounded-full text-white text-sm font-bold shadow-lg transition-all hover:shadow-xl active:scale-95" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                <Icon name="refresh-cw" size={14} className="inline mr-2" /> もう一度分析する
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 肌分析ツール: SkinAnalyzerView メインコンポーネント
+        // ==========================================
+
+        const SkinAnalyzerView = () => {
+            const [phase, setPhase] = useState('start'); // start, camera, analyzing, results
+            const [result, setResult] = useState(null);
+            const [imageDataUrl, setImageDataUrl] = useState(null);
+            const [cameraError, setCameraError] = useState('');
+            const [videoDimensions, setVideoDimensions] = useState({ w: 640, h: 480 });
+
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const streamRef = useRef(null);
+            const fileInputRef = useRef(null);
+            const containerRef = useRef(null);
+
+            // Start camera
+            const startCamera = async () => {
+                setCameraError('');
+                setPhase('camera');
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+                    });
+                    streamRef.current = stream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.onloadedmetadata = () => {
+                            setVideoDimensions({ w: videoRef.current.videoWidth, h: videoRef.current.videoHeight });
+                        };
+                    }
+                } catch (err) {
+                    console.error('Camera error:', err);
+                    setCameraError('カメラを起動できませんでした。写真をアップロードしてください。');
+                }
+            };
+
+            // Stop camera
+            const stopCamera = () => {
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(t => t.stop());
+                    streamRef.current = null;
+                }
+            };
+
+            // Capture from video
+            const capturePhoto = () => {
+                if (!videoRef.current || !canvasRef.current) return;
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                stopCamera();
+                processCanvas(canvas);
+            };
+
+            // Process uploaded file
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setPhase('analyzing');
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = canvasRef.current || document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    processCanvas(canvas);
+                };
+                img.src = URL.createObjectURL(file);
+            };
+
+            // Analyze canvas
+            const processCanvas = (canvas) => {
+                setPhase('analyzing');
+                setImageDataUrl(canvas.toDataURL('image/jpeg', 0.8));
+                // Use requestAnimationFrame to allow UI to update before heavy computation
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        try {
+                            const ctx = canvas.getContext('2d');
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const analysisResult = saRunFullAnalysis(imageData, canvas.width, canvas.height);
+                            setResult(analysisResult);
+                            setPhase('results');
+                        } catch (err) {
+                            console.error('Analysis error:', err);
+                            setCameraError('分析中にエラーが発生しました: ' + err.message);
+                            setPhase('start');
+                        }
+                    }, 500); // Small delay for spinner visibility
+                });
+            };
+
+            // Reset
+            const handleRetry = () => {
+                stopCamera();
+                setPhase('start');
+                setResult(null);
+                setImageDataUrl(null);
+                setCameraError('');
+            };
+
+            // Cleanup on unmount
+            useEffect(() => { return () => stopCamera(); }, []);
+
+            // Brand colors
+            const brand = { bg: '#faf7f4', text: '#2c2420', accent: '#a87e5a', light: '#c4956a', muted: '#a09080', border: '#e8e0d8', card: '#fff' };
+
+            // ========================
+            // START PHASE
+            // ========================
+            if (phase === 'start') {
+                return (
+                    <div className="h-full overflow-y-auto" style={{background:brand.bg}}>
+                        <div className="max-w-lg mx-auto px-6 py-10 flex flex-col items-center">
+                            {/* Face Icon SVG */}
+                            <div className="mb-6">
+                                <svg width="100" height="120" viewBox="0 0 100 120" fill="none">
+                                    <ellipse cx="50" cy="55" rx="35" ry="45" stroke={brand.accent} strokeWidth="2" strokeDasharray="4 3" fill={brand.bg} />
+                                    <circle cx="36" cy="44" r="3" fill={brand.accent} />
+                                    <circle cx="64" cy="44" r="3" fill={brand.accent} />
+                                    <ellipse cx="50" cy="58" rx="4" ry="5" stroke={brand.accent} strokeWidth="1.5" fill="none" />
+                                    <path d="M40 72 Q50 80 60 72" stroke={brand.accent} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                                    <path d="M20 35 Q15 20 30 15" stroke={brand.light} strokeWidth="1" fill="none" opacity="0.5" />
+                                    <path d="M80 35 Q85 20 70 15" stroke={brand.light} strokeWidth="1" fill="none" opacity="0.5" />
+                                </svg>
+                            </div>
+                            <h1 className="text-3xl font-light tracking-wider mb-2" style={{fontFamily:'"Cormorant Garamond",serif',color:brand.text}}>Skin Analysis</h1>
+                            <p className="text-sm mb-1" style={{color:brand.accent}}>肌状態を分析</p>
+                            <p className="text-xs text-center mb-8 leading-relaxed" style={{color:brand.muted}}>
+                                カメラで撮影した画像をもとに、6項目の肌指標を<br/>スコア化するカウンセリング補助ツールです。
+                            </p>
+
+                            {/* Buttons */}
+                            <div className="w-full space-y-3 mb-8">
+                                <button onClick={startCamera} className="w-full py-3.5 rounded-full text-white text-sm font-bold shadow-lg transition-all hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                    <Icon name="camera" size={18} /> カメラで撮影
+                                </button>
+                                <button onClick={() => fileInputRef.current?.click()} className="w-full py-3.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md active:scale-[0.98] flex items-center justify-center gap-2" style={{borderColor:brand.accent,color:brand.accent,background:'transparent'}}>
+                                    <Icon name="upload" size={18} /> 写真をアップロード
+                                </button>
+                                <input ref={fileInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileUpload} />
+                            </div>
+
+                            {cameraError && (
+                                <div className="w-full p-3 rounded-xl mb-6 text-xs" style={{background:'#FFF3E0',color:'#E65100',border:'1px solid #FFE0B2'}}>
+                                    {cameraError}
+                                </div>
+                            )}
+
+                            {/* Tips */}
+                            <div className="w-full rounded-2xl p-5 shadow-sm" style={{background:brand.card,border:`1px solid ${brand.border}`}}>
+                                <p className="text-xs font-bold mb-3 flex items-center gap-2" style={{color:brand.accent}}>
+                                    <Icon name="lightbulb" size={14} /> 撮影のコツ
+                                </p>
+                                <div className="space-y-2.5">
+                                    {[
+                                        { icon: 'sun', text: '自然光の下で撮影すると、より正確な分析ができます' },
+                                        { icon: 'glasses', text: 'メガネを外し、前髪は上げてください' },
+                                        { icon: 'scan', text: 'ガイドの楕円に顔を合わせてください' },
+                                        { icon: 'smile', text: 'リラックスした表情で正面を向いてください' },
+                                    ].map((tip, i) => (
+                                        <div key={i} className="flex items-start gap-2.5">
+                                            <Icon name={tip.icon} size={14} style={{color:brand.light,marginTop:2,flexShrink:0}} />
+                                            <p className="text-xs leading-relaxed" style={{color:brand.muted}}>{tip.text}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // ========================
+            // CAMERA PHASE
+            // ========================
+            if (phase === 'camera') {
+                return (
+                    <div className="h-full flex flex-col" style={{background:'#000'}}>
+                        <div className="flex-1 relative flex items-center justify-center overflow-hidden" ref={containerRef}>
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{transform:'scaleX(-1)'}} />
+                            {/* Guide overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <SAFaceGuideOverlay width={videoDimensions.w} height={videoDimensions.h} showZones={false} />
+                            </div>
+                            {cameraError && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                                    <div className="text-center p-6">
+                                        <p className="text-white text-sm mb-4">{cameraError}</p>
+                                        <button onClick={() => fileInputRef.current?.click()} className="px-6 py-2 rounded-full text-sm font-bold text-white" style={{background:brand.accent}}>
+                                            写真をアップロード
+                                        </button>
+                                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        {/* Controls */}
+                        <div className="shrink-0 py-6 px-4 flex items-center justify-center gap-6" style={{background:'rgba(0,0,0,0.9)'}}>
+                            <button onClick={handleRetry} className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-white/70 hover:bg-white/10 transition">
+                                <Icon name="arrow-left" size={20} />
+                            </button>
+                            <button onClick={capturePhoto} className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition hover:scale-105 active:scale-95" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                <Icon name="camera" size={28} color="white" />
+                            </button>
+                            <div className="w-12 h-12"></div>
+                        </div>
+                        <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                );
+            }
+
+            // ========================
+            // ANALYZING PHASE
+            // ========================
+            if (phase === 'analyzing') {
+                return (
+                    <div className="h-full flex flex-col items-center justify-center" style={{background:brand.bg}}>
+                        <div className="text-center">
+                            {/* Spinner */}
+                            <div className="relative w-24 h-24 mx-auto mb-6">
+                                <div className="absolute inset-0 rounded-full border-4 border-t-transparent animate-spin" style={{borderColor:`${brand.border}`,borderTopColor:'transparent',animationDuration:'0.8s'}}></div>
+                                <div className="absolute inset-2 rounded-full border-4 border-b-transparent animate-spin" style={{borderColor:`${brand.accent}`,borderBottomColor:'transparent',animationDuration:'1.2s',animationDirection:'reverse'}}></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Icon name="scan" size={24} style={{color:brand.accent}} />
+                                </div>
+                            </div>
+                            <p className="text-lg font-light tracking-wider mb-2" style={{fontFamily:'"Cormorant Garamond",serif',color:brand.text}}>Analyzing...</p>
+                            <p className="text-xs" style={{color:brand.muted}}>肌を分析中です</p>
+                        </div>
+                        <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                );
+            }
+
+            // ========================
+            // RESULTS PHASE
+            // ========================
+            if (phase === 'results' && result) {
+                return <SAResultsView result={result} imageDataUrl={imageDataUrl} onRetry={handleRetry} />;
+            }
+
+            return null;
+        };
         const SettingsView = ({ onSettingsSaved }) => {
             const [squareStatus, setSquareStatus] = useState({ loading: true });
             const [unifiedGasUrl, setUnifiedGasUrl] = useState(() => {
@@ -12979,6 +13648,7 @@
                 { id: 'tickets', label: '回数券', icon: 'ticket', mobileLabel: '回数券' },
                 { id: 'counseling', label: 'カウンセリング', icon: 'heart-handshake', mobileLabel: '案内' },
                 { id: 'treatment-report', label: '施術レポート', icon: 'file-heart', mobileLabel: 'レポ' },
+                { id: 'skin-analysis', label: '肌分析', icon: 'scan', mobileLabel: '肌分析' },
                 { id: 'line', label: 'LINEチャット', icon: 'message-circle', mobileLabel: 'LINE' },
                 ...(!isStaffMode || (currentAccess && currentAccess.role === 'headquarter') ? [{ id: 'marketing', label: 'マーケティング', icon: 'megaphone', mobileLabel: '広告' }] : []),
                 ...(!isStaffMode ? [{ id: 'settings', label: '設定', icon: 'settings', mobileLabel: '設定' }] : []),
@@ -13008,6 +13678,8 @@
                         return <ConceptFormView counselingHook={counselingHook} activeStoreId={activeStoreId} memberData={memberData} />;
                     case 'treatment-report':
                         return <TreatmentReportView lineChatHook={lineChatHook} />;
+                    case 'skin-analysis':
+                        return <SkinAnalyzerView />;
                     case 'line':
                         return <LineChatView lineChatHook={lineChatHook} />;
                     case 'marketing':
