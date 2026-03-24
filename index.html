@@ -1155,9 +1155,9 @@
     </style>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
         const RechartsLib = window.Recharts || {};
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, ComposedChart } = RechartsLib;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, ComposedChart, RadarChart, PolarGrid, PolarAngleAxis, Radar } = RechartsLib;
 
         // ========================================
         // 設定・定数
@@ -1430,11 +1430,11 @@
             }
             return '';
         };
-        const Icon = ({ name, size = 20, color = "currentColor", className = "" }) => {
+        const Icon = ({ name, size = 20, color = "currentColor", className = "", style: extraStyle = {} }) => {
             const svg = _getIconSvg(name, size, color);
             return svg
-                ? <span className={`inline-flex items-center justify-center shrink-0 ${className}`} style={{width: size, height: size}} dangerouslySetInnerHTML={{__html: svg}} />
-                : <span className={className} style={{width: size, height: size, display: 'inline-block'}} />;
+                ? <span className={`inline-flex items-center justify-center shrink-0 ${className}`} style={{width: size, height: size, ...extraStyle}} dangerouslySetInnerHTML={{__html: svg}} />
+                : <span className={className} style={{width: size, height: size, display: 'inline-block', ...extraStyle}} />;
         };
 
         // アバターカラー生成
@@ -12682,15 +12682,17 @@
             const grade = saGetGrade(score);
             return (
                 <div className="flex flex-col items-center">
-                    <svg width={size} height={size} className="transform -rotate-90">
-                        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f0ebe6" strokeWidth="10" />
-                        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={grade.color} strokeWidth="10"
-                            strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset}
-                            style={{transition:'stroke-dashoffset 1.2s ease-out'}} />
-                    </svg>
-                    <div className="absolute flex flex-col items-center justify-center" style={{width:size,height:size}}>
-                        <span className="text-4xl font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{score}</span>
-                        <span className="text-xs font-bold mt-1" style={{color:grade.color}}>{grade.label}</span>
+                    <div className="relative" style={{width:size,height:size}}>
+                        <svg width={size} height={size} className="transform -rotate-90">
+                            <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#f0ebe6" strokeWidth="10" />
+                            <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={grade.color} strokeWidth="10"
+                                strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset}
+                                style={{transition:'stroke-dashoffset 1.2s ease-out'}} />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-4xl font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{score}</span>
+                            <span className="text-xs font-bold mt-1" style={{color:grade.color}}>{grade.label}</span>
+                        </div>
                     </div>
                     <p className="text-xs mt-2" style={{color:'#a87e5a'}}>{label}</p>
                 </div>
@@ -12703,7 +12705,7 @@
                 <div className="border rounded-xl overflow-hidden transition-all cursor-pointer hover:shadow-md" style={{borderColor:'#e8e0d8',background:'#fff'}} onClick={onToggle}>
                     <div className="flex items-center p-4 gap-3">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{background:'#faf7f4'}}>
-                            <Icon name={metric.icon} size={18} style={{color:'#a87e5a'}} />
+                            <Icon name={metric.icon} size={18} color="#a87e5a" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold" style={{color:'#2c2420'}}>{metric.label}</p>
@@ -12712,7 +12714,7 @@
                         <div className="flex items-center gap-2 shrink-0">
                             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:grade.bg,color:grade.color}}>{grade.label}</span>
                             <span className="text-lg font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{result.score}</span>
-                            <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} style={{color:'#c0b0a0'}} />
+                            <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color="#c0b0a0" />
                         </div>
                     </div>
                     {isExpanded && result.zones && (
@@ -12735,11 +12737,11 @@
             );
         };
 
-        const SAFaceGuideOverlay = ({ width, height, showZones = true }) => {
+        const SAFaceGuideOverlay = ({ width = 100, height = 130, showZones = true }) => {
             const cx = width / 2, cy = height / 2;
             const rx = width * 0.32, ry = height * 0.42;
             return (
-                <svg width={width} height={height} className="absolute inset-0 pointer-events-none">
+                <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 w-full h-full pointer-events-none">
                     <defs>
                         <mask id="sa-oval-mask">
                             <rect width={width} height={height} fill="white" />
@@ -12766,7 +12768,7 @@
         };
 
         const SARadarChart = ({ metrics }) => {
-            const { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } = Recharts;
+            // RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip are globally destructured from RechartsLib
             const data = SA_METRICS.map(m => ({ subject: m.label.split('・')[0], score: metrics[m.key]?.score || 0, fullMark: 100 }));
             return (
                 <ResponsiveContainer width="100%" height={240}>
@@ -12846,7 +12848,7 @@
                         {/* Metric Cards */}
                         <div className="space-y-3 mb-6">
                             <h3 className="text-sm font-bold flex items-center gap-2" style={{color:'#2c2420'}}>
-                                <Icon name="list" size={16} style={{color:'#a87e5a'}} /> 項目別スコア
+                                <Icon name="list" size={16} color="#a87e5a" /> 項目別スコア
                             </h3>
                             {SA_METRICS.map(m => (
                                 <SAMetricCard key={m.key} metric={m} result={result.metrics[m.key]}
@@ -13056,7 +13058,7 @@
                                         { icon: 'smile', text: 'リラックスした表情で正面を向いてください' },
                                     ].map((tip, i) => (
                                         <div key={i} className="flex items-start gap-2.5">
-                                            <Icon name={tip.icon} size={14} style={{color:brand.light,marginTop:2,flexShrink:0}} />
+                                            <Icon name={tip.icon} size={14} color={brand.light} style={{marginTop:2,flexShrink:0}} />
                                             <p className="text-xs leading-relaxed" style={{color:brand.muted}}>{tip.text}</p>
                                         </div>
                                     ))}
@@ -13077,7 +13079,7 @@
                             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{transform:'scaleX(-1)'}} />
                             {/* Guide overlay */}
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <SAFaceGuideOverlay width={videoDimensions.w} height={videoDimensions.h} showZones={false} />
+                                <SAFaceGuideOverlay width={100} height={130} showZones={false} />
                             </div>
                             {cameraError && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/80">
@@ -13118,7 +13120,7 @@
                                 <div className="absolute inset-0 rounded-full border-4 border-t-transparent animate-spin" style={{borderColor:`${brand.border}`,borderTopColor:'transparent',animationDuration:'0.8s'}}></div>
                                 <div className="absolute inset-2 rounded-full border-4 border-b-transparent animate-spin" style={{borderColor:`${brand.accent}`,borderBottomColor:'transparent',animationDuration:'1.2s',animationDirection:'reverse'}}></div>
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    <Icon name="scan" size={24} style={{color:brand.accent}} />
+                                    <Icon name="scan" size={24} color={brand.accent} />
                                 </div>
                             </div>
                             <p className="text-lg font-light tracking-wider mb-2" style={{fontFamily:'"Cormorant Garamond",serif',color:brand.text}}>Analyzing...</p>
