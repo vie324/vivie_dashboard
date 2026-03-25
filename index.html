@@ -12762,7 +12762,7 @@
                             </g>
                         );
                     })}
-                    <text x={cx} y={30} textAnchor="middle" fill="white" fontSize={13} fontWeight="bold" style={{textShadow:'0 1px 3px rgba(0,0,0,0.6)'}}>ガイド枠に顔を合わせてください</text>
+                    <text x={cx} y={cy - ry - 8} textAnchor="middle" fill="white" fontSize={Math.max(width * 0.04, 10)} fontWeight="bold" style={{textShadow:'0 1px 3px rgba(0,0,0,0.6)'}}>ガイド枠に顔を合わせてください</text>
                 </svg>
             );
         };
@@ -12805,30 +12805,13 @@
                             <p className="text-xs" style={{color:'#a09080'}}>{new Date(result.timestamp).toLocaleString('ja-JP')}</p>
                         </div>
 
-                        {/* Image with zone overlay */}
+                        {/* Image with zone overlay — canvas is already mirrored to match preview */}
                         {imageDataUrl && (
                             <div className="relative mx-auto mb-6 rounded-2xl overflow-hidden shadow-lg" style={{maxWidth:360}}>
-                                <img src={imageDataUrl} alt="分析画像" className="w-full" style={{transform:'scaleX(-1)'}} />
+                                <img src={imageDataUrl} alt="分析画像" className="w-full" />
+                                {/* Zone overlay uses same coordinate space as analysis engine */}
                                 <div className="absolute inset-0">
-                                    {(() => {
-                                        const w = 360, h = 480;
-                                        const cx = w/2, cy = h/2, rx = w*0.32, ry = h*0.42;
-                                        return FACE_ZONES.map(z => {
-                                            const zx = cx - rx + z.x * 2 * rx;
-                                            const zy = cy - ry + z.y * 2 * ry;
-                                            const zw = z.w * 2 * rx;
-                                            const zh = z.h * 2 * ry;
-                                            return (
-                                                <div key={z.key} className="absolute rounded" style={{
-                                                    left: `${(zx/w)*100}%`, top: `${(zy/h)*100}%`,
-                                                    width: `${(zw/w)*100}%`, height: `${(zh/h)*100}%`,
-                                                    background: z.color + '30', border: `1px solid ${z.color}60`,
-                                                }}>
-                                                    <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white" style={{textShadow:'0 1px 2px rgba(0,0,0,0.5)'}}>{z.label}</span>
-                                                </div>
-                                            );
-                                        });
-                                    })()}
+                                    <SAFaceGuideOverlay width={result.imageW || 640} height={result.imageH || 480} showZones={true} />
                                 </div>
                             </div>
                         )}
@@ -12936,7 +12919,7 @@
                 }
             };
 
-            // Capture from video
+            // Capture from video (mirror to match preview)
             const capturePhoto = () => {
                 if (!videoRef.current || !canvasRef.current) return;
                 const video = videoRef.current;
@@ -12944,7 +12927,11 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
+                // Mirror horizontally to match the scaleX(-1) preview the user sees
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
                 ctx.drawImage(video, 0, 0);
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
                 stopCamera();
                 processCanvas(canvas);
             };
@@ -12977,6 +12964,8 @@
                             const ctx = canvas.getContext('2d');
                             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                             const analysisResult = saRunFullAnalysis(imageData, canvas.width, canvas.height);
+                            analysisResult.imageW = canvas.width;
+                            analysisResult.imageH = canvas.height;
                             setResult(analysisResult);
                             setPhase('results');
                         } catch (err) {
@@ -13076,10 +13065,10 @@
                 return (
                     <div className="h-full flex flex-col" style={{background:'#000'}}>
                         <div className="flex-1 relative flex items-center justify-center overflow-hidden" ref={containerRef}>
-                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{transform:'scaleX(-1)'}} />
-                            {/* Guide overlay */}
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" style={{transform:'scaleX(-1)'}} />
+                            {/* Guide overlay with zone boxes — uses actual video aspect ratio */}
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <SAFaceGuideOverlay width={100} height={130} showZones={false} />
+                                <SAFaceGuideOverlay width={videoDimensions.w || 640} height={videoDimensions.h || 480} showZones={true} />
                             </div>
                             {cameraError && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/80">
