@@ -12500,6 +12500,73 @@
             { key: 'moisture', label: '水分・油分', icon: 'droplets', desc: '推定うるおいバランスを評価します' },
         ];
 
+        // ==========================================
+        // 指標別: 原因説明 / リスク / おすすめ施術
+        // ==========================================
+
+        const SA_DIAGNOSIS = {
+            uniformity: {
+                excellent: { reason: '肌全体のトーンが均一で、くすみがほとんど見られません', risk: null },
+                good:      { reason: '軽いくすみが見られますが、ほぼ均一なトーンです', risk: '角質の蓄積により、徐々にトーンダウンする可能性があります' },
+                caution:   { reason: '部位によって明るさに差があり、くすみが目立ちます', risk: 'ターンオーバーの乱れが進行し、肌全体の透明感が失われやすくなります' },
+                warning:   { reason: '肌全体にくすみが広がり、透明感が低下しています', risk: '放置すると色素が定着し、慢性的なくすみ肌になりやすくなります' },
+                courses: [
+                    { name: '幹細胞ハーブピーリング', desc: '古い角質を除去し、ターンオーバーを正常化。透明感のある肌へ導きます', icon: 'sparkles' },
+                ],
+            },
+            redness: {
+                excellent: { reason: '赤みや炎症の兆候はほぼ見られません', risk: null },
+                good:      { reason: '軽い赤みが部分的に見られます', risk: '季節の変わり目や刺激で赤みが悪化しやすい状態です' },
+                caution:   { reason: '頬や鼻周りに赤みが目立ちます。バリア機能の低下が考えられます', risk: '慢性的な赤みに発展し、毛細血管拡張のリスクが高まります' },
+                warning:   { reason: '広範囲に強い赤みがあり、炎症が起きている可能性があります', risk: '肌荒れが常態化し、敏感肌が進行するリスクがあります' },
+                courses: [
+                    { name: '幹細胞ハーブピーリング', desc: '炎症を鎮静しながら肌のバリア機能を修復します', icon: 'shield' },
+                    { name: 'よもぎ蒸し', desc: '血行促進で肌の自然治癒力をサポートし、赤みを緩和します', icon: 'leaf' },
+                ],
+            },
+            texture: {
+                excellent: { reason: '肌のキメが細かく、なめらかな状態です', risk: null },
+                good:      { reason: '全体的になめらかですが、部分的に毛穴の開きが見られます', risk: '皮脂や汚れが蓄積し、毛穴が徐々に目立ちやすくなります' },
+                caution:   { reason: '鼻や頬の毛穴に皮脂詰まりが見られ、キメの乱れがあります', risk: 'このまま放置すると角栓が黒ずみ化し、毛穴が広がりやすくなります' },
+                warning:   { reason: '毛穴の開き・詰まりが目立ち、肌表面のざらつきが強い状態です', risk: '毛穴がたるみ毛穴へ進行し、ファンデーションでもカバーしづらくなります' },
+                courses: [
+                    { name: 'ハイドラフェイシャル', desc: '水流で毛穴の汚れを除去し、同時に美容成分を導入。即効性が高い施術です', icon: 'droplets' },
+                    { name: '幹細胞ハーブピーリング', desc: 'BHA配合で皮脂詰まりを溶解。キメを整え毛穴を引き締めます', icon: 'sparkles' },
+                ],
+            },
+            pigment: {
+                excellent: { reason: '色素沈着やシミはほとんど見られません', risk: null },
+                good:      { reason: '薄いシミや色ムラがわずかに確認できます', risk: '紫外線ダメージの蓄積で、シミが濃く・大きくなりやすい状態です' },
+                caution:   { reason: '目立つシミや色素沈着があります。日焼けや炎症後の跡と考えられます', risk: 'メラニンが真皮層まで沈着すると、セルフケアでは改善困難になります' },
+                warning:   { reason: '複数の色素沈着が広範囲に確認できます', risk: '色素の定着が進み、通常のスキンケアでは対処が難しくなります' },
+                courses: [
+                    { name: '幹細胞ハーブピーリング', desc: 'ターンオーバーを促進し、メラニンの排出を加速します', icon: 'sparkles' },
+                ],
+            },
+            firmness: {
+                excellent: { reason: '左右のバランスが良く、ハリのある状態です', risk: null },
+                good:      { reason: 'わずかな左右差がありますが、ハリは概ね保たれています', risk: '表情筋の衰えが進むと、フェイスラインの崩れに繋がります' },
+                caution:   { reason: '頬のたるみや目元のくすみが確認できます', risk: 'コラーゲンの減少が進行し、ほうれい線やマリオネットラインが深くなります' },
+                warning:   { reason: '明らかなたるみと目元のくまが見られます', risk: '放置すると二重顎やフェイスラインの崩れが進みます' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: '表情筋にアプローチし、リフトアップ。頭皮からの引き上げ効果も', icon: 'move' },
+                ],
+            },
+            moisture: {
+                excellent: { reason: '水分と油分のバランスが良好で、うるおいが保たれています', risk: null },
+                good:      { reason: 'やや乾燥気味ですが、大きな崩れはありません', risk: 'バリア機能が低下し、外部刺激に弱くなりやすい状態です' },
+                caution:   { reason: 'Tゾーンのテカリとフェイスラインの乾燥が見られ、インナードライの傾向です', risk: '乾燥が進行すると小じわが増え、見た目年齢が上がりやすくなります' },
+                warning:   { reason: '水分不足が顕著で、肌全体の乾燥が目立ちます', risk: '深い乾燥じわに発展し、肌トラブルが起きやすい状態が続きます' },
+                courses: [
+                    { name: 'よもぎ蒸し', desc: '身体を芯から温め、血行促進。水分代謝を改善し、うるおい肌へ導きます', icon: 'leaf' },
+                    { name: '幹細胞ハーブピーリング', desc: '古い角質を除去し、化粧水の浸透力をUP。保湿力を底上げします', icon: 'sparkles' },
+                ],
+            },
+        };
+
+        // 指標スコアからグレードキーを取得
+        const saScoreToGradeKey = (score) => score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 45 ? 'caution' : 'warning';
+
         const saGetGrade = (score) => {
             if (score >= 80) return SA_GRADE_CONFIG.excellent;
             if (score >= 65) return SA_GRADE_CONFIG.good;
@@ -12985,6 +13052,12 @@
 
         const SAMetricCard = ({ metric, result, isExpanded, onToggle }) => {
             const grade = saGetGrade(result.score);
+            const gradeKey = saScoreToGradeKey(result.score);
+            const diag = SA_DIAGNOSIS[metric.key];
+            const info = diag ? diag[gradeKey] : null;
+            const courses = diag ? diag.courses : [];
+            const showCourses = gradeKey !== 'excellent' && courses.length > 0;
+
             return (
                 <div className="border rounded-xl overflow-hidden transition-all cursor-pointer hover:shadow-md" style={{borderColor:'#e8e0d8',background:'#fff'}} onClick={onToggle}>
                     <div className="flex items-center p-4 gap-3">
@@ -12993,7 +13066,8 @@
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold" style={{color:'#2c2420'}}>{metric.label}</p>
-                            <p className="text-[10px]" style={{color:'#a09080'}}>{metric.desc}</p>
+                            {/* 原因の短い説明 */}
+                            {info && <p className="text-[11px] mt-0.5" style={{color: gradeKey === 'excellent' ? '#558B2F' : '#706050'}}>{info.reason}</p>}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:grade.bg,color:grade.color}}>{grade.label}</span>
@@ -13001,20 +13075,55 @@
                             <Icon name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color="#c0b0a0" />
                         </div>
                     </div>
-                    {isExpanded && result.zones && (
+                    {isExpanded && (
                         <div className="px-4 pb-4 pt-0 border-t" style={{borderColor:'#f0ebe6'}}>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-                                {Object.entries(result.zones).map(([zoneKey, zoneScore]) => {
-                                    const zone = FACE_ZONES.find(z => z.key === zoneKey);
-                                    const zGrade = saGetGrade(Math.round(zoneScore));
-                                    return (
-                                        <div key={zoneKey} className="text-center p-2 rounded-lg" style={{background:zGrade.bg}}>
-                                            <p className="text-[10px] font-bold" style={{color:'#706050'}}>{zone ? zone.label : zoneKey}</p>
-                                            <p className="text-lg font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:zGrade.color}}>{Math.round(zoneScore)}</p>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            {/* リスク警告 */}
+                            {info && info.risk && (
+                                <div className="flex items-start gap-2 mt-3 p-3 rounded-lg" style={{background:'#FFF8E1',border:'1px solid #FFE082'}}>
+                                    <Icon name="alert-triangle" size={14} color="#F9A825" style={{marginTop:1,flexShrink:0}} />
+                                    <div>
+                                        <p className="text-[10px] font-bold" style={{color:'#E65100'}}>放置した場合のリスク</p>
+                                        <p className="text-[11px] mt-0.5" style={{color:'#5D4037',lineHeight:'1.5'}}>{info.risk}</p>
+                                    </div>
+                                </div>
+                            )}
+                            {/* おすすめ施術 */}
+                            {showCourses && (
+                                <div className="mt-3">
+                                    <p className="text-[10px] font-bold mb-2" style={{color:'#a87e5a'}}>おすすめ施術</p>
+                                    <div className="space-y-2">
+                                        {courses.map((c, i) => (
+                                            <div key={i} className="flex items-start gap-3 p-3 rounded-lg" style={{background:'linear-gradient(135deg, #faf7f4, #f5ede5)',border:'1px solid #e8e0d8'}}>
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{background:'#a87e5a'}}>
+                                                    <Icon name={c.icon} size={14} color="white" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold" style={{color:'#2c2420'}}>{c.name}</p>
+                                                    <p className="text-[10px] mt-0.5" style={{color:'#706050',lineHeight:'1.5'}}>{c.desc}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {/* ゾーン別スコア */}
+                            {result.zones && (
+                                <div className="mt-3">
+                                    <p className="text-[10px] font-bold mb-2" style={{color:'#a09080'}}>部位別スコア</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {Object.entries(result.zones).map(([zoneKey, zoneScore]) => {
+                                            const zone = FACE_ZONES.find(z => z.key === zoneKey);
+                                            const zGrade = saGetGrade(Math.round(zoneScore));
+                                            return (
+                                                <div key={zoneKey} className="text-center p-2 rounded-lg" style={{background:zGrade.bg}}>
+                                                    <p className="text-[10px] font-bold" style={{color:'#706050'}}>{zone ? zone.label : zoneKey}</p>
+                                                    <p className="text-lg font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:zGrade.color}}>{Math.round(zoneScore)}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -13067,12 +13176,186 @@
         };
 
         // ==========================================
+        // 肌分析ツール: localStorage 保存・読出し
+        // ==========================================
+
+        const SA_STORAGE_KEY = 'vivie_skin_analysis_history';
+
+        const saSaveResult = (result, imageDataUrl) => {
+            try {
+                const history = JSON.parse(localStorage.getItem(SA_STORAGE_KEY) || '[]');
+                // 画像はサイズ削減のためサムネイルとして保存
+                history.unshift({ result, imageDataUrl, savedAt: new Date().toISOString() });
+                // 最大10件保持
+                if (history.length > 10) history.length = 10;
+                localStorage.setItem(SA_STORAGE_KEY, JSON.stringify(history));
+            } catch (e) { console.warn('肌分析データの保存に失敗:', e); }
+        };
+
+        const saLoadHistory = () => {
+            try { return JSON.parse(localStorage.getItem(SA_STORAGE_KEY) || '[]'); }
+            catch { return []; }
+        };
+
+        // ==========================================
+        // 肌分析ツール: ビフォーアフター比較コンポーネント
+        // ==========================================
+
+        const SABeforeAfter = ({ current, currentImage, previous }) => {
+            if (!previous || !previous.result) return null;
+            const prev = previous.result;
+            const diff = current.totalScore - prev.totalScore;
+            const diffColor = diff > 0 ? '#2E7D32' : diff < 0 ? '#E65100' : '#706050';
+            const diffSign = diff > 0 ? '+' : '';
+
+            return (
+                <div className="bg-white rounded-2xl p-4 shadow-sm border mb-6" style={{borderColor:'#e8e0d8'}}>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold flex items-center gap-2" style={{color:'#2c2420'}}>
+                            <Icon name="git-compare" size={16} color="#a87e5a" /> ビフォーアフター
+                        </h3>
+                        <span className="text-[10px]" style={{color:'#a09080'}}>前回: {new Date(prev.timestamp).toLocaleDateString('ja-JP')}</span>
+                    </div>
+
+                    {/* 写真比較 */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        {previous.imageDataUrl && (
+                            <div className="rounded-xl overflow-hidden border" style={{borderColor:'#e8e0d8'}}>
+                                <p className="text-center text-[10px] font-bold py-1" style={{background:'#f5f0eb',color:'#a09080'}}>BEFORE</p>
+                                <img src={previous.imageDataUrl} alt="前回" className="w-full aspect-[3/4] object-cover" />
+                            </div>
+                        )}
+                        {currentImage && (
+                            <div className="rounded-xl overflow-hidden border" style={{borderColor:'#c4956a'}}>
+                                <p className="text-center text-[10px] font-bold py-1" style={{background:'linear-gradient(135deg, #faf7f4, #f5ede5)',color:'#a87e5a'}}>AFTER</p>
+                                <img src={currentImage} alt="今回" className="w-full aspect-[3/4] object-cover" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 総合スコア変化 */}
+                    <div className="flex items-center justify-center gap-4 mb-4 p-3 rounded-xl" style={{background:'#faf7f4'}}>
+                        <div className="text-center">
+                            <p className="text-[10px]" style={{color:'#a09080'}}>前回</p>
+                            <p className="text-2xl font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#706050'}}>{prev.totalScore}</p>
+                        </div>
+                        <div className="text-center px-4">
+                            <Icon name="arrow-right" size={16} color="#a87e5a" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-[10px]" style={{color:'#a09080'}}>今回</p>
+                            <p className="text-2xl font-light" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{current.totalScore}</p>
+                        </div>
+                        <div className="text-center ml-2 px-3 py-1 rounded-full" style={{background: diff > 0 ? '#E8F5E9' : diff < 0 ? '#FFF3E0' : '#f5f0eb'}}>
+                            <p className="text-lg font-bold" style={{color:diffColor}}>{diffSign}{diff}</p>
+                        </div>
+                    </div>
+
+                    {/* 指標別変化 */}
+                    <div className="space-y-2">
+                        {SA_METRICS.map(m => {
+                            const curScore = current.metrics[m.key]?.score || 0;
+                            const prevScore = prev.metrics[m.key]?.score || 0;
+                            const d = curScore - prevScore;
+                            if (d === 0) return null;
+                            const dc = d > 0 ? '#2E7D32' : '#E65100';
+                            return (
+                                <div key={m.key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{background: d > 0 ? '#E8F5E9' : '#FFF3E0'}}>
+                                    <div className="flex items-center gap-2">
+                                        <Icon name={m.icon} size={14} color="#a87e5a" />
+                                        <span className="text-xs font-bold" style={{color:'#2c2420'}}>{m.label}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs" style={{color:'#a09080'}}>{prevScore}</span>
+                                        <span className="text-xs" style={{color:'#a09080'}}>→</span>
+                                        <span className="text-xs font-bold" style={{color:'#2c2420'}}>{curScore}</span>
+                                        <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{color:dc,background:d > 0 ? '#C8E6C9' : '#FFE0B2'}}>
+                                            {d > 0 ? '+' : ''}{d}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 肌分析ツール: おすすめコース提案セクション
+        // ==========================================
+
+        const SACourseSuggestion = ({ result }) => {
+            // 改善が必要な指標から重複なしでコースを集める
+            const courseMap = new Map();
+            SA_METRICS.forEach(m => {
+                const score = result.metrics[m.key]?.score || 0;
+                if (score >= 80) return; // 優秀なら提案不要
+                const diag = SA_DIAGNOSIS[m.key];
+                if (!diag || !diag.courses) return;
+                diag.courses.forEach(c => {
+                    if (!courseMap.has(c.name)) {
+                        courseMap.set(c.name, { ...c, forMetrics: [] });
+                    }
+                    courseMap.get(c.name).forMetrics.push(m.label.split('・')[0]);
+                });
+            });
+            const courses = [...courseMap.values()];
+            if (courses.length === 0) return null;
+
+            return (
+                <div className="rounded-2xl p-4 shadow-sm border mb-6 relative overflow-hidden" style={{background:'linear-gradient(135deg, #2c2420, #4a3830)',borderColor:'#5a4a40'}}>
+                    {/* 背景装飾 */}
+                    <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{background:'radial-gradient(circle, #c4956a, transparent)',transform:'translate(30%,-30%)'}}></div>
+                    <h3 className="text-sm font-bold flex items-center gap-2 mb-1" style={{color:'#e8d5c4'}}>
+                        <Icon name="sparkles" size={16} color="#c4956a" /> あなたにおすすめの施術
+                    </h3>
+                    <p className="text-[10px] mb-4" style={{color:'#a09080'}}>診断結果に基づき、改善効果が期待できる施術をご提案します</p>
+                    <div className="space-y-3">
+                        {courses.map((c, i) => (
+                            <div key={i} className="rounded-xl p-4 relative" style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(196,149,106,0.3)'}}>
+                                <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                        <Icon name={c.icon} size={18} color="white" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-bold" style={{color:'#fff'}}>{c.name}</p>
+                                        <p className="text-[11px] mt-1" style={{color:'#d4c4b4',lineHeight:'1.5'}}>{c.desc}</p>
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {c.forMetrics.map((label, j) => (
+                                                <span key={j} className="text-[9px] px-2 py-0.5 rounded-full" style={{background:'rgba(196,149,106,0.25)',color:'#e8d5c4',border:'1px solid rgba(196,149,106,0.3)'}}>{label}の改善に</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-[10px] mt-4 text-center" style={{color:'#a09080'}}>
+                        詳しくはスタッフまでお気軽にご相談ください
+                    </p>
+                </div>
+            );
+        };
+
+        // ==========================================
         // 肌分析ツール: ResultsView
         // ==========================================
 
         const SAResultsView = ({ result, imageDataUrl, onRetry }) => {
             const [expandedMetric, setExpandedMetric] = useState(null);
+            const [showBeforeAfter, setShowBeforeAfter] = useState(false);
             const grade = saGetGrade(result.totalScore);
+
+            // localStorage に保存 & 前回結果を取得
+            const history = useMemo(() => saLoadHistory(), []);
+            const previousResult = history.length > 0 ? history[0] : null;
+
+            // 初回マウント時に結果を保存
+            useEffect(() => {
+                saSaveResult(result, imageDataUrl);
+            }, []);
+
             const getAdvice = (score) => {
                 if (score >= 80) return '素晴らしい肌状態です。現在のケアを継続しましょう。';
                 if (score >= 65) return '良好な状態です。気になるポイントを重点ケアで改善できます。';
@@ -13089,11 +13372,10 @@
                             <p className="text-xs" style={{color:'#a09080'}}>{new Date(result.timestamp).toLocaleString('ja-JP')}</p>
                         </div>
 
-                        {/* Image with zone overlay — canvas is already mirrored to match preview */}
+                        {/* Image with zone overlay */}
                         {imageDataUrl && (
                             <div className="relative mx-auto mb-6 rounded-2xl overflow-hidden shadow-lg" style={{maxWidth:360}}>
                                 <img src={imageDataUrl} alt="分析画像" className="w-full" />
-                                {/* Zone overlay uses same coordinate space as analysis engine */}
                                 <div className="absolute inset-0">
                                     <SAFaceGuideOverlay width={result.imageW || 640} height={result.imageH || 480} showZones={true} />
                                 </div>
@@ -13112,6 +13394,22 @@
                             </div>
                         </div>
 
+                        {/* ビフォーアフター比較 */}
+                        {previousResult && (
+                            <div className="mb-6">
+                                {!showBeforeAfter ? (
+                                    <button onClick={() => setShowBeforeAfter(true)} className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition hover:shadow-md" style={{background:'#fff',border:'1px dashed #c4956a',color:'#a87e5a'}}>
+                                        <Icon name="git-compare" size={16} color="#a87e5a" /> 前回の結果と比較する
+                                    </button>
+                                ) : (
+                                    <SABeforeAfter current={result} currentImage={imageDataUrl} previous={previousResult} />
+                                )}
+                            </div>
+                        )}
+
+                        {/* おすすめコース提案 */}
+                        <SACourseSuggestion result={result} />
+
                         {/* Metric Cards */}
                         <div className="space-y-3 mb-6">
                             <h3 className="text-sm font-bold flex items-center gap-2" style={{color:'#2c2420'}}>
@@ -13122,19 +13420,6 @@
                                     isExpanded={expandedMetric === m.key}
                                     onToggle={() => setExpandedMetric(expandedMetric === m.key ? null : m.key)} />
                             ))}
-                        </div>
-
-                        {/* Grade Legend */}
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border mb-6" style={{borderColor:'#e8e0d8'}}>
-                            <p className="text-xs font-bold mb-3" style={{color:'#706050'}}>グレード凡例</p>
-                            <div className="flex flex-wrap gap-3">
-                                {Object.entries(SA_GRADE_CONFIG).map(([key, cfg]) => (
-                                    <div key={key} className="flex items-center gap-1.5">
-                                        <div className="w-3 h-3 rounded-full" style={{background:cfg.color}}></div>
-                                        <span className="text-xs" style={{color:'#706050'}}>{cfg.label} ({cfg.min}+)</span>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
 
                         {/* Disclaimer */}
