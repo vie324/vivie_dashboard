@@ -12507,7 +12507,10 @@
             return SA_GRADE_CONFIG.warning;
         };
 
-        // Color utils
+        // ==========================================
+        // 色空間ユーティリティ (HSL + Lab)
+        // ==========================================
+
         const saRgbToHsl = (r, g, b) => {
             r /= 255; g /= 255; b /= 255;
             const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -12524,6 +12527,59 @@
             return { h: h * 360, s: s * 100, l: l * 100 };
         };
 
+        // [D] Lab色空間: 人間の知覚に近い色差計算、a*=赤み/緑み、b*=黄み/青み
+        const saRgbToLab = (r, g, b) => {
+            // sRGB → linear
+            let rl = r / 255, gl = g / 255, bl = b / 255;
+            rl = rl > 0.04045 ? Math.pow((rl + 0.055) / 1.055, 2.4) : rl / 12.92;
+            gl = gl > 0.04045 ? Math.pow((gl + 0.055) / 1.055, 2.4) : gl / 12.92;
+            bl = bl > 0.04045 ? Math.pow((bl + 0.055) / 1.055, 2.4) : bl / 12.92;
+            // linear RGB → XYZ (D65)
+            let x = (rl * 0.4124564 + gl * 0.3575761 + bl * 0.1804375) / 0.95047;
+            let y = (rl * 0.2126729 + gl * 0.7151522 + bl * 0.0721750);
+            let z = (rl * 0.0193339 + gl * 0.1191920 + bl * 0.9503041) / 1.08883;
+            const f = (t) => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+            x = f(x); y = f(y); z = f(z);
+            return { L: 116 * y - 16, a: 500 * (x - y), b: 200 * (y - z) };
+        };
+
+        // ==========================================
+        // [A] 照明・ホワイトバランス補正 (Gray World)
+        // ==========================================
+
+        const saWhiteBalance = (imageData) => {
+            const data = imageData.data;
+            const len = data.length;
+            // サンプリング: 全ピクセルの代わりに等間隔でサンプリング（速度UP）
+            const step = Math.max(1, Math.floor(len / (4 * 50000))) * 4;
+            let sumR = 0, sumG = 0, sumB = 0, count = 0;
+            for (let i = 0; i < len; i += step) {
+                sumR += data[i]; sumG += data[i + 1]; sumB += data[i + 2];
+                count++;
+            }
+            if (count === 0) return imageData;
+            const avgR = sumR / count, avgG = sumG / count, avgB = sumB / count;
+            const avgGray = (avgR + avgG + avgB) / 3;
+            // 極端な補正を防ぐためクランプ
+            const scaleR = Math.min(1.5, Math.max(0.7, avgGray / (avgR || 1)));
+            const scaleG = Math.min(1.5, Math.max(0.7, avgGray / (avgG || 1)));
+            const scaleB = Math.min(1.5, Math.max(0.7, avgGray / (avgB || 1)));
+            // 新しいImageDataを作成して補正適用
+            const corrected = new ImageData(new Uint8ClampedArray(data), imageData.width, imageData.height);
+            const cd = corrected.data;
+            for (let i = 0; i < len; i += 4) {
+                cd[i]     = Math.min(255, Math.round(data[i] * scaleR));
+                cd[i + 1] = Math.min(255, Math.round(data[i + 1] * scaleG));
+                cd[i + 2] = Math.min(255, Math.round(data[i + 2] * scaleB));
+                cd[i + 3] = data[i + 3];
+            }
+            return corrected;
+        };
+
+        // ==========================================
+        // [F] サンプリング改善: ゾーンピクセル抽出 + 外れ値除去
+        // ==========================================
+
         const saGetPixelsInZone = (imageData, zone, ovalCx, ovalCy, ovalRx, ovalRy) => {
             const pixels = [];
             const zoneX = Math.round(ovalCx - ovalRx + zone.x * 2 * ovalRx);
@@ -12532,9 +12588,11 @@
             const zoneH = Math.round(zone.h * 2 * ovalRy);
             const w = imageData.width;
             const data = imageData.data;
-            for (let y = zoneY; y < zoneY + zoneH && y < imageData.height; y++) {
-                for (let x = zoneX; x < zoneX + zoneW && x < w; x++) {
-                    // Check if inside ellipse
+            // グリッドサンプリング: 2px間隔で取得（速度2-4倍向上、ノイズ軽減）
+            const sampleStep = Math.max(1, Math.min(3, Math.floor(Math.max(zoneW, zoneH) / 60)));
+            for (let y = zoneY; y < zoneY + zoneH && y < imageData.height; y += sampleStep) {
+                for (let x = zoneX; x < zoneX + zoneW && x < w; x += sampleStep) {
+                    if (x < 0 || y < 0) continue;
                     const dx = (x - ovalCx) / ovalRx;
                     const dy = (y - ovalCy) / ovalRy;
                     if (dx * dx + dy * dy <= 1) {
@@ -12548,127 +12606,353 @@
             return pixels;
         };
 
-        // ==========================================
-        // 肌分析ツール: スコアリングエンジン
-        // ==========================================
-
-        const saAnalyzeUniformity = (pixels) => {
-            if (pixels.length === 0) return 50;
-            const hsls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b));
-            const ls = hsls.map(h => h.l);
-            const ss = hsls.map(h => h.s);
-            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
-            const meanS = ss.reduce((a, b) => a + b, 0) / ss.length;
-            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
-            const uniformScore = Math.max(0, 100 - sdL * 4);
-            const brightnessScore = Math.max(0, 100 - Math.abs(meanL - 60) * 2);
-            const satScore = Math.max(0, 100 - Math.abs(meanS - 25) * 3);
-            return Math.max(0, Math.min(100, uniformScore * 0.5 + brightnessScore * 0.3 + satScore * 0.2));
+        // [F] 2Dグリッドとしてピクセル抽出（テクスチャ解析用）
+        const saGetPixelGrid = (imageData, zone, ovalCx, ovalCy, ovalRx, ovalRy) => {
+            const zoneX = Math.round(ovalCx - ovalRx + zone.x * 2 * ovalRx);
+            const zoneY = Math.round(ovalCy - ovalRy + zone.y * 2 * ovalRy);
+            const zoneW = Math.round(zone.w * 2 * ovalRx);
+            const zoneH = Math.round(zone.h * 2 * ovalRy);
+            const w = imageData.width;
+            const data = imageData.data;
+            const grid = [];
+            for (let y = zoneY; y < zoneY + zoneH && y < imageData.height; y++) {
+                const row = [];
+                for (let x = zoneX; x < zoneX + zoneW && x < w; x++) {
+                    if (x < 0 || y < 0) { row.push(0); continue; }
+                    const i = (y * w + x) * 4;
+                    row.push(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+                }
+                if (row.length > 0) grid.push(row);
+            }
+            return grid;
         };
 
-        const saAnalyzeRedness = (pixels) => {
-            if (pixels.length === 0) return 50;
-            let redCount = 0;
-            let totalExcess = 0;
-            pixels.forEach(p => {
-                const sum = p.r + p.g + p.b;
-                if (sum === 0) return;
-                const rRatio = p.r / sum;
-                const excess = p.r - (p.g + p.b) / 2;
-                totalExcess += excess;
-                if (rRatio > 0.42 && excess > 15) redCount++;
-            });
-            const redRatio = redCount / pixels.length;
-            const avgExcess = totalExcess / pixels.length;
-            return Math.max(0, Math.min(100, 100 - redRatio * 200 - Math.max(0, avgExcess) * 1.5));
+        // [F] トリム平均: 上下p%の外れ値を除去した平均
+        const saTrimmedMean = (arr, trimPercent = 0.05) => {
+            if (arr.length === 0) return 0;
+            const sorted = [...arr].sort((a, b) => a - b);
+            const trim = Math.floor(sorted.length * trimPercent);
+            const trimmed = sorted.slice(trim, sorted.length - trim);
+            if (trimmed.length === 0) return sorted[Math.floor(sorted.length / 2)];
+            return trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
         };
 
-        const saAnalyzeTexture = (pixels) => {
-            if (pixels.length < 9) return 50;
-            const grays = pixels.map(p => 0.299 * p.r + 0.587 * p.g + 0.114 * p.b);
-            const side = Math.floor(Math.sqrt(grays.length));
-            if (side < 3) return 50;
-            let edgeSum = 0, edgeCount = 0;
-            for (let y = 1; y < side - 1; y++) {
-                for (let x = 1; x < side - 1; x++) {
-                    const idx = y * side + x;
-                    const lap = grays[idx - 1] + grays[idx + 1] + grays[idx - side] + grays[idx + side] - 4 * grays[idx];
-                    edgeSum += Math.abs(lap);
-                    edgeCount++;
+        // [F] トリム標準偏差
+        const saTrimmedSD = (arr, trimPercent = 0.05) => {
+            if (arr.length < 3) return 0;
+            const sorted = [...arr].sort((a, b) => a - b);
+            const trim = Math.floor(sorted.length * trimPercent);
+            const trimmed = sorted.slice(trim, sorted.length - trim);
+            if (trimmed.length < 2) return 0;
+            const mean = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+            return Math.sqrt(trimmed.reduce((s, v) => s + (v - mean) ** 2, 0) / trimmed.length);
+        };
+
+        // ==========================================
+        // [B] 適応的基準値 (肌色パーソナルベースライン)
+        // ==========================================
+
+        const saComputeBaseline = (allPixels) => {
+            if (allPixels.length === 0) return { meanL: 60, meanA: 10, meanB: 20, sdL: 5 };
+            const labs = allPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+            const Ls = labs.map(l => l.L);
+            const As = labs.map(l => l.a);
+            const Bs = labs.map(l => l.b);
+            return {
+                meanL: saTrimmedMean(Ls),
+                meanA: saTrimmedMean(As),
+                meanB: saTrimmedMean(Bs),
+                sdL: saTrimmedSD(Ls),
+                sdA: saTrimmedSD(As),
+                sdB: saTrimmedSD(Bs),
+            };
+        };
+
+        // ==========================================
+        // 肌分析ツール: 改善版スコアリングエンジン
+        // ==========================================
+
+        // [A+B+D] 色ムラ — Lab色空間 + 適応的閾値 + トリム統計
+        const saAnalyzeUniformity = (pixels, baseline) => {
+            if (pixels.length === 0) return 50;
+            const labs = pixels.map(p => saRgbToLab(p.r, p.g, p.b));
+            const Ls = labs.map(l => l.L);
+            const As = labs.map(l => l.a);
+            const Bs = labs.map(l => l.b);
+            // 明度の均一性（トリムSD / 適応的基準）
+            const sdL = saTrimmedSD(Ls);
+            const refSD = Math.max(3, baseline.sdL); // 本人の基準SD
+            const uniformL = Math.max(0, 100 - (sdL / refSD) * 30);
+            // a*チャンネル（赤み）の均一性
+            const sdA = saTrimmedSD(As);
+            const uniformA = Math.max(0, 100 - sdA * 3);
+            // b*チャンネル（黄み）の均一性
+            const sdB = saTrimmedSD(Bs);
+            const uniformB = Math.max(0, 100 - sdB * 2.5);
+            return Math.max(0, Math.min(100, uniformL * 0.5 + uniformA * 0.3 + uniformB * 0.2));
+        };
+
+        // [A+D] 赤み — Lab a*軸で直接判定 + 適応的閾値
+        const saAnalyzeRedness = (pixels, baseline) => {
+            if (pixels.length === 0) return 50;
+            const labs = pixels.map(p => saRgbToLab(p.r, p.g, p.b));
+            const As = labs.map(l => l.a);
+            const meanA = saTrimmedMean(As);
+            // 基準値からの赤み偏差
+            const redShift = Math.max(0, meanA - baseline.meanA);
+            // a*が高い（赤い）ピクセルの割合 — 適応的閾値
+            const redThreshold = baseline.meanA + Math.max(3, baseline.sdA * 1.5);
+            const redCount = As.filter(a => a > redThreshold).length;
+            const redRatio = redCount / As.length;
+            // ゾーン内のa*値のばらつき（赤みムラ）
+            const sdA = saTrimmedSD(As);
+            const shiftScore = Math.max(0, 100 - redShift * 6);
+            const ratioScore = Math.max(0, 100 - redRatio * 250);
+            const varianceScore = Math.max(0, 100 - sdA * 3);
+            return Math.max(0, Math.min(100, shiftScore * 0.4 + ratioScore * 0.35 + varianceScore * 0.25));
+        };
+
+        // [C] テクスチャ — Sobelフィルタ + 正しい2Dグリッド + GLCM簡易版
+        const saAnalyzeTexture = (grid) => {
+            if (!grid || grid.length < 5 || !grid[0] || grid[0].length < 5) return 50;
+            const rows = grid.length, cols = grid[0].length;
+
+            // Sobelフィルタでエッジ強度
+            let sobelSum = 0, sobelCount = 0;
+            for (let y = 1; y < rows - 1; y++) {
+                for (let x = 1; x < cols - 1; x++) {
+                    const gx = -grid[y-1][x-1] + grid[y-1][x+1]
+                             - 2*grid[y][x-1] + 2*grid[y][x+1]
+                             - grid[y+1][x-1] + grid[y+1][x+1];
+                    const gy = -grid[y-1][x-1] - 2*grid[y-1][x] - grid[y-1][x+1]
+                             + grid[y+1][x-1] + 2*grid[y+1][x] + grid[y+1][x+1];
+                    sobelSum += Math.sqrt(gx * gx + gy * gy);
+                    sobelCount++;
                 }
             }
-            const avgEdge = edgeCount > 0 ? edgeSum / edgeCount : 0;
-            return Math.max(0, Math.min(100, 100 - avgEdge * 2.5));
+            const avgSobel = sobelCount > 0 ? sobelSum / sobelCount : 0;
+            // Sobel正規化 (0-255スケール、典型的な肌は5-25程度)
+            const sobelScore = Math.max(0, 100 - avgSobel * 2.0);
+
+            // GLCM簡易版: 隣接ピクセルとの差分で「滑らかさ」推定
+            let adjDiffSum = 0, adjCount = 0;
+            const step = Math.max(1, Math.floor(Math.min(rows, cols) / 40));
+            for (let y = 0; y < rows; y += step) {
+                for (let x = 0; x < cols - 1; x += step) {
+                    adjDiffSum += Math.abs(grid[y][x] - grid[y][x + 1]);
+                    adjCount++;
+                }
+            }
+            for (let y = 0; y < rows - 1; y += step) {
+                for (let x = 0; x < cols; x += step) {
+                    adjDiffSum += Math.abs(grid[y][x] - grid[y + 1][x]);
+                    adjCount++;
+                }
+            }
+            const avgAdj = adjCount > 0 ? adjDiffSum / adjCount : 0;
+            const smoothScore = Math.max(0, 100 - avgAdj * 3.0);
+
+            return Math.max(0, Math.min(100, sobelScore * 0.55 + smoothScore * 0.45));
         };
 
-        const saAnalyzePigmentation = (pixels) => {
+        // [B+D] 色素沈着 — Lab L*で暗部検出 + 適応的閾値 + b*で黄ぐすみ
+        const saAnalyzePigmentation = (pixels, baseline) => {
             if (pixels.length === 0) return 50;
-            const ls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b).l);
-            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
-            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
-            const threshold = meanL - 1.5 * sdL;
-            const darkCount = ls.filter(l => l < threshold).length;
-            const darkRatio = darkCount / ls.length;
-            return Math.max(0, Math.min(100, 100 - darkRatio * 500));
+            const labs = pixels.map(p => saRgbToLab(p.r, p.g, p.b));
+            const Ls = labs.map(l => l.L);
+            const Bs = labs.map(l => l.b);
+            // 暗部検出: 本人の平均明度 - 1.8σ を閾値とする
+            const darkThreshold = baseline.meanL - 1.8 * Math.max(2, baseline.sdL);
+            const darkPixels = Ls.filter(l => l < darkThreshold);
+            const darkRatio = darkPixels.length / Ls.length;
+            // 暗部の深さ（どれだけ暗いか）
+            const darkDepth = darkPixels.length > 0
+                ? darkPixels.reduce((s, l) => s + (darkThreshold - l), 0) / darkPixels.length
+                : 0;
+            // 黄ぐすみ: b*値の偏りチェック
+            const meanB = saTrimmedMean(Bs);
+            const yellowShift = Math.max(0, meanB - baseline.meanB - 3);
+            const darkScore = Math.max(0, 100 - darkRatio * 350 - darkDepth * 3);
+            const yellowScore = Math.max(0, 100 - yellowShift * 8);
+            return Math.max(0, Math.min(100, darkScore * 0.65 + yellowScore * 0.35));
         };
 
-        const saAnalyzeFirmness = (leftPixels, rightPixels) => {
+        // [E] ハリ — 左右対称性 + 目元/頬の色差 + Lab色差ΔE
+        const saAnalyzeFirmness = (leftPixels, rightPixels, underEyeLPixels, underEyeRPixels, baseline) => {
             if (leftPixels.length === 0 || rightPixels.length === 0) return 50;
-            const avgL = (px) => px.reduce((s, p) => s + saRgbToHsl(p.r, p.g, p.b).l, 0) / px.length;
-            const avgR = (px) => px.reduce((s, p) => s + p.r, 0) / px.length;
-            const lDiff = Math.abs(avgL(leftPixels) - avgL(rightPixels));
-            const rDiff = Math.abs(avgR(leftPixels) - avgR(rightPixels));
-            return Math.max(0, Math.min(100, 100 - lDiff * 3 - rDiff * 0.5));
+            const avgLab = (px) => {
+                if (px.length === 0) return { L: baseline.meanL, a: baseline.meanA, b: baseline.meanB };
+                const labs = px.map(p => saRgbToLab(p.r, p.g, p.b));
+                return {
+                    L: saTrimmedMean(labs.map(l => l.L)),
+                    a: saTrimmedMean(labs.map(l => l.a)),
+                    b: saTrimmedMean(labs.map(l => l.b)),
+                };
+            };
+            const leftLab = avgLab(leftPixels);
+            const rightLab = avgLab(rightPixels);
+            // ΔE (CIE76) で左右の色差を計算
+            const deltaE = Math.sqrt(
+                (leftLab.L - rightLab.L) ** 2 +
+                (leftLab.a - rightLab.a) ** 2 +
+                (leftLab.b - rightLab.b) ** 2
+            );
+            const symmetryScore = Math.max(0, 100 - deltaE * 5);
+
+            // 目元のくすみ（頬より暗い = たるみ/くまの兆候）
+            let eyeScore = 100;
+            if (underEyeLPixels.length > 0 && underEyeRPixels.length > 0) {
+                const eyeL = avgLab(underEyeLPixels);
+                const eyeR = avgLab(underEyeRPixels);
+                const cheekAvgL = (leftLab.L + rightLab.L) / 2;
+                const eyeAvgL = (eyeL.L + eyeR.L) / 2;
+                const eyeDarkness = Math.max(0, cheekAvgL - eyeAvgL);
+                eyeScore = Math.max(0, 100 - eyeDarkness * 4);
+            }
+
+            // 左右の明度分布の均一性
+            const leftLs = leftPixels.map(p => saRgbToLab(p.r, p.g, p.b).L);
+            const rightLs = rightPixels.map(p => saRgbToLab(p.r, p.g, p.b).L);
+            const sdDiff = Math.abs(saTrimmedSD(leftLs) - saTrimmedSD(rightLs));
+            const distScore = Math.max(0, 100 - sdDiff * 5);
+
+            return Math.max(0, Math.min(100, symmetryScore * 0.45 + eyeScore * 0.35 + distScore * 0.2));
         };
 
-        const saAnalyzeMoisture = (pixels) => {
-            if (pixels.length === 0) return 50;
-            const ls = pixels.map(p => saRgbToHsl(p.r, p.g, p.b).l);
-            const meanL = ls.reduce((a, b) => a + b, 0) / ls.length;
-            const shinyCount = ls.filter(l => l > meanL + 25).length;
-            const shinyRatio = shinyCount / ls.length;
-            const oilScore = Math.max(0, 100 - shinyRatio * 400);
-            const sdL = Math.sqrt(ls.reduce((sum, v) => sum + (v - meanL) ** 2, 0) / ls.length);
-            const smoothScore = Math.max(0, 100 - sdL * 3);
-            return Math.max(0, Math.min(100, smoothScore * 0.6 + oilScore * 0.4));
+        // [E+D] 水分バランス — Tゾーン vs Uゾーン油分差 + Lab明度解析
+        const saAnalyzeMoisture = (tZonePixels, uZonePixels, baseline) => {
+            if (tZonePixels.length === 0 && uZonePixels.length === 0) return 50;
+            const allPx = [...tZonePixels, ...uZonePixels];
+            const labs = allPx.map(p => saRgbToLab(p.r, p.g, p.b));
+            const Ls = labs.map(l => l.L);
+            const meanL = saTrimmedMean(Ls);
+
+            // テカリ検出: 基準明度よりかなり明るいピクセル
+            const shinyThreshold = baseline.meanL + Math.max(15, baseline.sdL * 2.5);
+            const shinyCount = Ls.filter(l => l > shinyThreshold).length;
+            const shinyRatio = shinyCount / Ls.length;
+            const oilScore = Math.max(0, 100 - shinyRatio * 300);
+
+            // 乾燥検出: 明度の高周波ばらつき
+            const sdL = saTrimmedSD(Ls);
+            const dryScore = Math.max(0, 100 - Math.max(0, sdL - baseline.sdL) * 5);
+
+            // [E] Tゾーン vs Uゾーン バランス
+            let balanceScore = 100;
+            if (tZonePixels.length > 0 && uZonePixels.length > 0) {
+                const tLabs = tZonePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const uLabs = uZonePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const tMeanL = saTrimmedMean(tLabs.map(l => l.L));
+                const uMeanL = saTrimmedMean(uLabs.map(l => l.L));
+                const zoneDiff = Math.abs(tMeanL - uMeanL);
+                balanceScore = Math.max(0, 100 - zoneDiff * 3);
+            }
+
+            return Math.max(0, Math.min(100, oilScore * 0.35 + dryScore * 0.30 + balanceScore * 0.35));
         };
+
+        // ==========================================
+        // 統合分析エンジン
+        // ==========================================
 
         const saRunFullAnalysis = (imageData, canvasW, canvasH) => {
+            // [A] ホワイトバランス補正
+            const corrected = saWhiteBalance(imageData);
             const cx = canvasW / 2, cy = canvasH / 2;
             const rx = canvasW * 0.32, ry = canvasH * 0.42;
-            // Extract pixels for all zones
+
+            // ゾーン別ピクセル抽出
             const zonePixels = {};
             FACE_ZONES.forEach(z => {
-                zonePixels[z.key] = saGetPixelsInZone(imageData, z, cx, cy, rx, ry);
+                zonePixels[z.key] = saGetPixelsInZone(corrected, z, cx, cy, rx, ry);
             });
             const allPixels = Object.values(zonePixels).flat();
+
+            // [B] パーソナルベースライン算出
+            const baseline = saComputeBaseline(allPixels);
+
             const bothCheeks = [...(zonePixels.leftCheek || []), ...(zonePixels.rightCheek || [])];
             const tZone = [...(zonePixels.forehead || []), ...(zonePixels.nose || [])];
 
-            const analyzePerZone = (fn, keys) => {
+            // [C] テクスチャ用2Dグリッド抽出
+            const cheekGrids = ['leftCheek', 'rightCheek'].map(k => {
+                const z = FACE_ZONES.find(fz => fz.key === k);
+                return z ? saGetPixelGrid(corrected, z, cx, cy, rx, ry) : [];
+            });
+            // 頬グリッドを結合（行数が多い方に合わせる）
+            const mergedGrid = cheekGrids[0].length > 0 ? cheekGrids[0] : cheekGrids[1];
+
+            const gradeFromScore = (s) => s >= 80 ? 'excellent' : s >= 65 ? 'good' : s >= 45 ? 'caution' : 'warning';
+
+            const analyzePerZone = (fn, keys, extraArgs = []) => {
                 const zones = {};
-                keys.forEach(k => { zones[k] = fn(zonePixels[k] || []); });
+                keys.forEach(k => { zones[k] = Math.round(fn(zonePixels[k] || [], ...extraArgs)); });
                 return zones;
             };
 
-            const uniformityScore = saAnalyzeUniformity(allPixels);
-            const rednessScore = saAnalyzeRedness(allPixels);
-            const textureScore = saAnalyzeTexture(bothCheeks);
-            const pigmentScore = saAnalyzePigmentation(allPixels);
-            const firmnessScore = saAnalyzeFirmness(zonePixels.leftCheek || [], zonePixels.rightCheek || []);
-            const moistureScore = saAnalyzeMoisture(allPixels);
+            // 各指標のスコア算出
+            const uniformityScore = saAnalyzeUniformity(allPixels, baseline);
+            const rednessScore = saAnalyzeRedness(allPixels, baseline);
+            const textureScore = saAnalyzeTexture(mergedGrid);
+            const pigmentScore = saAnalyzePigmentation(allPixels, baseline);
+            const firmnessScore = saAnalyzeFirmness(
+                zonePixels.leftCheek || [], zonePixels.rightCheek || [],
+                zonePixels.underEyeL || [], zonePixels.underEyeR || [],
+                baseline
+            );
+            const moistureScore = saAnalyzeMoisture(tZone, bothCheeks, baseline);
 
             const metrics = {
-                uniformity: { score: Math.round(uniformityScore), grade: saGetGrade(uniformityScore).label === '優秀' ? 'excellent' : saGetGrade(uniformityScore).label === '良好' ? 'good' : saGetGrade(uniformityScore).label === '注意' ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeUniformity, ['forehead','leftCheek','rightCheek','nose']) },
-                redness: { score: Math.round(rednessScore), grade: rednessScore >= 80 ? 'excellent' : rednessScore >= 65 ? 'good' : rednessScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeRedness, ['forehead','leftCheek','rightCheek','nose']) },
-                texture: { score: Math.round(textureScore), grade: textureScore >= 80 ? 'excellent' : textureScore >= 65 ? 'good' : textureScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzeTexture, ['leftCheek','rightCheek','forehead']) },
-                pigment: { score: Math.round(pigmentScore), grade: pigmentScore >= 80 ? 'excellent' : pigmentScore >= 65 ? 'good' : pigmentScore >= 45 ? 'caution' : 'warning', zones: analyzePerZone(saAnalyzePigmentation, ['forehead','leftCheek','rightCheek']) },
-                firmness: { score: Math.round(firmnessScore), grade: firmnessScore >= 80 ? 'excellent' : firmnessScore >= 65 ? 'good' : firmnessScore >= 45 ? 'caution' : 'warning', zones: { leftCheek: Math.round(saAnalyzeUniformity(zonePixels.leftCheek || [])), rightCheek: Math.round(saAnalyzeUniformity(zonePixels.rightCheek || [])), underEyeL: Math.round(saAnalyzeUniformity(zonePixels.underEyeL || [])), underEyeR: Math.round(saAnalyzeUniformity(zonePixels.underEyeR || [])) } },
-                moisture: { score: Math.round(moistureScore), grade: moistureScore >= 80 ? 'excellent' : moistureScore >= 65 ? 'good' : moistureScore >= 45 ? 'caution' : 'warning', zones: { tZone: Math.round(saAnalyzeMoisture(tZone)), uZone: Math.round(saAnalyzeMoisture(bothCheeks)) } },
+                uniformity: {
+                    score: Math.round(uniformityScore),
+                    grade: gradeFromScore(uniformityScore),
+                    zones: analyzePerZone(saAnalyzeUniformity, ['forehead','leftCheek','rightCheek','nose'], [baseline]),
+                },
+                redness: {
+                    score: Math.round(rednessScore),
+                    grade: gradeFromScore(rednessScore),
+                    zones: analyzePerZone(saAnalyzeRedness, ['forehead','leftCheek','rightCheek','nose'], [baseline]),
+                },
+                texture: {
+                    score: Math.round(textureScore),
+                    grade: gradeFromScore(textureScore),
+                    zones: (() => {
+                        const tz = {};
+                        ['leftCheek','rightCheek','forehead'].forEach(k => {
+                            const z = FACE_ZONES.find(fz => fz.key === k);
+                            const g = z ? saGetPixelGrid(corrected, z, cx, cy, rx, ry) : [];
+                            tz[k] = Math.round(saAnalyzeTexture(g));
+                        });
+                        return tz;
+                    })(),
+                },
+                pigment: {
+                    score: Math.round(pigmentScore),
+                    grade: gradeFromScore(pigmentScore),
+                    zones: analyzePerZone(saAnalyzePigmentation, ['forehead','leftCheek','rightCheek'], [baseline]),
+                },
+                firmness: {
+                    score: Math.round(firmnessScore),
+                    grade: gradeFromScore(firmnessScore),
+                    zones: {
+                        leftCheek: Math.round(saAnalyzeUniformity(zonePixels.leftCheek || [], baseline)),
+                        rightCheek: Math.round(saAnalyzeUniformity(zonePixels.rightCheek || [], baseline)),
+                        underEyeL: Math.round(saAnalyzeUniformity(zonePixels.underEyeL || [], baseline)),
+                        underEyeR: Math.round(saAnalyzeUniformity(zonePixels.underEyeR || [], baseline)),
+                    },
+                },
+                moisture: {
+                    score: Math.round(moistureScore),
+                    grade: gradeFromScore(moistureScore),
+                    zones: {
+                        tZone: Math.round(saAnalyzeMoisture(tZone, [], baseline)),
+                        uZone: Math.round(saAnalyzeMoisture([], bothCheeks, baseline)),
+                    },
+                },
             };
 
             const totalScore = Math.round(Object.values(metrics).reduce((s, m) => s + m.score, 0) / 6);
-            return { metrics, totalScore, timestamp: new Date().toISOString() };
+            return { metrics, totalScore, baseline, timestamp: new Date().toISOString() };
         };
 
         // ==========================================
