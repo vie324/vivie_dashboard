@@ -12564,6 +12564,135 @@
             },
         };
 
+        // ==========================================
+        // 小顔診断: 指標定義 & 診断コンテンツ
+        // ==========================================
+
+        const SF_METRICS = [
+            { key: 'symmetry', label: '左右バランス', icon: 'git-merge', desc: '顔の左右対称性を評価します' },
+            { key: 'swelling', label: 'むくみ度', icon: 'droplets', desc: '顔のむくみレベルを評価します' },
+            { key: 'jawline', label: 'フェイスライン', icon: 'hexagon', desc: '顎〜フェイスラインのシャープさを評価します' },
+            { key: 'sagging', label: 'たるみ・リフト', icon: 'arrow-up-circle', desc: '頬や目元のたるみ具合を評価します' },
+            { key: 'muscle', label: '筋肉の柔軟性', icon: 'activity', desc: '表情筋の柔軟性・コリを評価します' },
+        ];
+
+        const SF_DIAGNOSIS = {
+            symmetry: {
+                excellent: { reason: '左右のバランスが非常に良く、整った印象です', risk: null },
+                good:      { reason: '軽い左右差がありますが、ほぼ整ったバランスです', risk: '噛み癖や頬杖の習慣で左右差が広がる可能性があります' },
+                caution:   { reason: '顔の左右で明るさや色味に差が見られます', risk: '骨格の歪みが進行し、肩こりや頭痛の原因になることもあります' },
+                warning:   { reason: '左右差が顕著で、筋肉や骨格の偏りが考えられます', risk: '放置すると歪みが定着し、噛み合わせや全身のバランスにも影響します' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: '骨格・筋膜にアプローチし、左右のバランスを整えます。頭皮からのリフトアップ効果も', icon: 'move' },
+                ],
+            },
+            swelling: {
+                excellent: { reason: 'むくみはほとんど見られず、すっきりとした印象です', risk: null },
+                good:      { reason: '軽いむくみが見られますが、大きな問題はありません', risk: '水分・塩分の摂りすぎで慢性的なむくみに発展しやすくなります' },
+                caution:   { reason: '頬やフェイスラインにむくみが確認できます', risk: 'リンパの滞りが続くと、顔が大きく見える状態が慢性化します' },
+                warning:   { reason: '全体的にむくみが強く、輪郭がぼやけています', risk: 'リンパ・血行不良が深刻化し、くすみや肌トラブルも併発しやすくなります' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: 'リンパの流れを改善し、むくみをすっきり解消。即効性の高い施術です', icon: 'move' },
+                    { name: 'ラジオ波/RF（小顔/たるみケア）', desc: 'RF温熱でリンパの流れを促進し、むくみの根本原因にアプローチします', icon: 'zap' },
+                ],
+            },
+            jawline: {
+                excellent: { reason: 'フェイスラインがシャープで、引き締まった印象です', risk: null },
+                good:      { reason: '概ね良好ですが、やや輪郭のぼやけが見られます', risk: '加齢や表情筋の衰えでフェイスラインが崩れやすくなります' },
+                caution:   { reason: 'フェイスラインが緩み、二重顎の兆候が見られます', risk: 'このまま放置すると、顎下の脂肪が蓄積し、老けた印象が定着します' },
+                warning:   { reason: 'フェイスラインの崩れが顕著で、顔全体がぼやけた印象です', risk: '表情筋とコラーゲンの衰えが進行し、セルフケアでの改善が困難になります' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: '筋膜リリースでフェイスラインをシャープに整えます', icon: 'move' },
+                    { name: 'EMS（リフトアップ/引き締め）', desc: '表情筋を電気刺激で鍛え、引き締まったフェイスラインへ導きます', icon: 'zap' },
+                ],
+            },
+            sagging: {
+                excellent: { reason: 'ハリがあり、たるみはほぼ見られません', risk: null },
+                good:      { reason: '軽いたるみの兆候がありますが、概ね良好です', risk: '紫外線や乾燥でコラーゲンが減少し、たるみが進行しやすくなります' },
+                caution:   { reason: '目元や頬のたるみが確認できます', risk: 'ほうれい線やマリオネットラインが深くなり、見た目年齢が上がります' },
+                warning:   { reason: '全体的にたるみが強く、輪郭の崩れが目立ちます', risk: '真皮のコラーゲン・エラスチンの損傷が深刻化し、元に戻りづらくなります' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: '頭皮から頬の引き上げ効果。たるみを根本からケアします', icon: 'move' },
+                    { name: 'ラジオ波/RF（小顔/たるみケア）', desc: 'コラーゲンの再生を促し、ハリのある肌へ導きます', icon: 'zap' },
+                ],
+            },
+            muscle: {
+                excellent: { reason: '表情筋の柔軟性が高く、良好な状態です', risk: null },
+                good:      { reason: '軽い筋肉のコリが見られますが、概ね良好です', risk: 'デスクワークやスマホの使いすぎで、コリが深まる可能性があります' },
+                caution:   { reason: '表情筋のコリが確認できます。咬筋の張りも考えられます', risk: '筋肉のコリが食いしばりを悪化させ、エラが張りやすくなります' },
+                warning:   { reason: '表情筋の硬直が顕著で、エラ張りや顔の大きさに影響しています', risk: '顎関節症や慢性的な頭痛に発展するリスクがあります' },
+                courses: [
+                    { name: '小顔矯正＋ドライヘッドスパ', desc: '咬筋・側頭筋のコリをほぐし、エラ張りを改善。リラックス効果も', icon: 'move' },
+                    { name: 'EMS（リフトアップ/引き締め）', desc: '深層筋にアプローチし、凝り固まった表情筋をほぐします', icon: 'zap' },
+                ],
+            },
+        };
+
+        // ==========================================
+        // 毛穴診断: 指標定義 & 診断コンテンツ
+        // ==========================================
+
+        const PORE_METRICS = [
+            { key: 'openPores', label: '毛穴の開き', icon: 'maximize-2', desc: '毛穴の開き具合を評価します' },
+            { key: 'blackheads', label: '黒ずみ・角栓', icon: 'circle', desc: '毛穴の黒ずみや角栓の状態を評価します' },
+            { key: 'saggingPores', label: 'たるみ毛穴', icon: 'chevrons-down', desc: '頬の毛穴のたるみ（縦伸び）を評価します' },
+            { key: 'smoothness', label: 'キメの細かさ', icon: 'feather', desc: '肌表面のなめらかさ・キメを評価します' },
+            { key: 'oilBalance', label: '皮脂バランス', icon: 'droplets', desc: 'Tゾーン・Uゾーンの皮脂バランスを評価します' },
+        ];
+
+        const PORE_DIAGNOSIS = {
+            openPores: {
+                excellent: { reason: '毛穴が引き締まっており、目立ちにくい状態です', risk: null },
+                good:      { reason: '小鼻や頬に軽い毛穴の開きが見られます', risk: '皮脂の過剰分泌で毛穴が徐々に広がりやすくなります' },
+                caution:   { reason: '鼻・頬を中心に毛穴の開きが目立ちます', risk: '毛穴に皮脂や汚れが溜まり、さらに広がる悪循環に陥りやすくなります' },
+                warning:   { reason: '毛穴の開きが顕著で、ファンデーションでもカバーしづらい状態です', risk: '毛穴が常に開いた状態が定着し、自力での改善が困難になります' },
+                courses: [
+                    { name: 'ハイドラフェイシャル（毛穴洗浄）', desc: '水流で毛穴の汚れを除去し、美容成分を導入。毛穴を引き締めます', icon: 'droplets' },
+                    { name: '幹細胞ハーブピーリング', desc: '古い角質を除去し、毛穴を引き締め。ターンオーバーを正常化します', icon: 'sparkles' },
+                ],
+            },
+            blackheads: {
+                excellent: { reason: '毛穴の黒ずみや角栓はほとんど見られません', risk: null },
+                good:      { reason: '小鼻周りにわずかな角栓が確認できます', risk: '角栓が酸化して黒ずみに変わりやすい状態です' },
+                caution:   { reason: '小鼻や頬の毛穴に黒ずみ・角栓が目立ちます', risk: '角栓が硬化し、通常のクレンジングでは取りきれなくなります' },
+                warning:   { reason: '広範囲に黒ずみが見られ、いちご鼻の状態です', risk: '毛穴が黒ずみで塞がり、ニキビや炎症が起きやすくなります' },
+                courses: [
+                    { name: 'ハイドラフェイシャル（毛穴洗浄）', desc: '水流と吸引で角栓を除去。痛みなく毛穴をクリアにします', icon: 'droplets' },
+                    { name: 'プラズマ（殺菌/鎮静/シミケア）', desc: 'プラズマで毛穴を殺菌・鎮静し、黒ずみの再発を防ぎます', icon: 'shield' },
+                ],
+            },
+            saggingPores: {
+                excellent: { reason: '毛穴が丸く小さい状態で、たるみは見られません', risk: null },
+                good:      { reason: '頬の一部に軽い毛穴のたるみが見られます', risk: 'コラーゲンの減少で毛穴が縦に伸び始める可能性があります' },
+                caution:   { reason: '頬の毛穴が縦長に変形し、たるみ毛穴が目立ちます', risk: '肌のハリがさらに低下し、毛穴同士がつながる「帯状毛穴」に進行します' },
+                warning:   { reason: 'たるみ毛穴が広範囲に見られ、帯状毛穴の兆候もあります', risk: '真皮の弾力低下が深刻で、たるみ毛穴がシワのように見えるようになります' },
+                courses: [
+                    { name: 'ラジオ波/RF（小顔/たるみケア）', desc: 'コラーゲン再生を促進し、毛穴周りの肌にハリを取り戻します', icon: 'zap' },
+                    { name: 'EMS（リフトアップ/引き締め）', desc: '表情筋を鍛えて肌を引き上げ、たるみ毛穴を目立たなくします', icon: 'zap' },
+                ],
+            },
+            smoothness: {
+                excellent: { reason: 'キメが細かく、なめらかな肌表面です', risk: null },
+                good:      { reason: '全体的に良好ですが、部分的にざらつきがあります', risk: '角質の蓄積でくすみやざらつきが増す可能性があります' },
+                caution:   { reason: '肌表面のざらつきが気になり、キメの乱れが見られます', risk: '化粧ノリが悪くなり、肌老化が進みやすい状態です' },
+                warning:   { reason: 'キメの乱れが顕著で、全体的にざらつきが目立ちます', risk: 'バリア機能が低下し、乾燥・肌荒れが慢性化します' },
+                courses: [
+                    { name: '幹細胞ハーブピーリング', desc: '天然ハーブで古い角質をオフ。キメを整え、つるんとした肌へ', icon: 'sparkles' },
+                    { name: 'ハイドラフェイシャル（毛穴洗浄）', desc: 'ざらつきの原因となる汚れを除去し、なめらかな肌に導きます', icon: 'droplets' },
+                ],
+            },
+            oilBalance: {
+                excellent: { reason: '皮脂バランスが良好で、テカリや乾燥が少ない状態です', risk: null },
+                good:      { reason: 'Tゾーンにやや皮脂が多めですが、概ね良好です', risk: '季節の変化で皮脂バランスが崩れやすい状態です' },
+                caution:   { reason: 'Tゾーンのテカリとフェイスラインの乾燥が見られます（インナードライ）', risk: '皮脂の過剰分泌が毛穴を詰まらせ、ニキビや吹き出物の原因になります' },
+                warning:   { reason: '皮脂バランスの乱れが顕著で、テカリと乾燥が混在しています', risk: 'バリア機能が破壊され、あらゆる肌トラブルが起きやすくなります' },
+                courses: [
+                    { name: 'ハイドラフェイシャル（毛穴洗浄）', desc: '余分な皮脂を除去しながら保湿成分を導入。皮脂バランスを整えます', icon: 'droplets' },
+                    { name: 'よもぎ蒸し', desc: '身体の内側から水分代謝を改善し、皮脂バランスの根本改善へ', icon: 'leaf' },
+                ],
+            },
+        };
+
         // 指標スコアからグレードキーを取得
         const saScoreToGradeKey = (score) => score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 45 ? 'caution' : 'warning';
 
@@ -12919,6 +13048,293 @@
         };
 
         // ==========================================
+        // 小顔診断: 分析エンジン
+        // ==========================================
+
+        const sfRunAnalysis = (imageData, canvasW, canvasH) => {
+            const corrected = saWhiteBalance(imageData);
+            const cx = canvasW / 2, cy = canvasH / 2;
+            const rx = canvasW * 0.32, ry = canvasH * 0.42;
+
+            const zonePixels = {};
+            FACE_ZONES.forEach(z => {
+                zonePixels[z.key] = saGetPixelsInZone(corrected, z, cx, cy, rx, ry);
+            });
+            const allPixels = Object.values(zonePixels).flat();
+            const baseline = saComputeBaseline(allPixels);
+
+            const gradeFromScore = (s) => s >= 80 ? 'excellent' : s >= 65 ? 'good' : s >= 45 ? 'caution' : 'warning';
+
+            // 1. 左右バランス: 左右頬のLab色差
+            const leftPixels = zonePixels.leftCheek || [];
+            const rightPixels = zonePixels.rightCheek || [];
+            let symmetryScore = 75;
+            if (leftPixels.length > 0 && rightPixels.length > 0) {
+                const lLabs = leftPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const rLabs = rightPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const lMeanL = saTrimmedMean(lLabs.map(l => l.L));
+                const rMeanL = saTrimmedMean(rLabs.map(l => l.L));
+                const lMeanA = saTrimmedMean(lLabs.map(l => l.a));
+                const rMeanA = saTrimmedMean(rLabs.map(l => l.a));
+                const lMeanB = saTrimmedMean(lLabs.map(l => l.b));
+                const rMeanB = saTrimmedMean(rLabs.map(l => l.b));
+                const deltaE = Math.sqrt((lMeanL - rMeanL) ** 2 + (lMeanA - rMeanA) ** 2 + (lMeanB - rMeanB) ** 2);
+                symmetryScore = Math.max(0, Math.min(100, 100 - deltaE * 4));
+            }
+
+            // 2. むくみ度: 頬の明度均一性（高均一=膨張感）+ 顎の明度差
+            let swellingScore = 70;
+            const bothCheeks = [...leftPixels, ...rightPixels];
+            if (bothCheeks.length > 0) {
+                const cheekLabs = bothCheeks.map(p => saRgbToLab(p.r, p.g, p.b));
+                const cheekLs = cheekLabs.map(l => l.L);
+                const sdL = saTrimmedSD(cheekLs);
+                // 低い変動 = むくみの可能性（パンパンに膨らんだ肌は均一に見える）
+                const variationScore = Math.min(100, sdL * 8);
+                // 頬と顎の明度差（差が小さい = 輪郭がぼやけている）
+                const chinPixels = zonePixels.chin || [];
+                let contourScore = 70;
+                if (chinPixels.length > 0) {
+                    const chinLabs = chinPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                    const chinMeanL = saTrimmedMean(chinLabs.map(l => l.L));
+                    const cheekMeanL = saTrimmedMean(cheekLs);
+                    const diff = Math.abs(cheekMeanL - chinMeanL);
+                    contourScore = Math.min(100, diff * 6);
+                }
+                swellingScore = Math.max(0, Math.min(100, variationScore * 0.5 + contourScore * 0.5));
+            }
+
+            // 3. フェイスライン: 顎エリアのコントラスト（エッジが明確=シャープ）
+            let jawlineScore = 70;
+            const chinPixels = zonePixels.chin || [];
+            if (chinPixels.length > 0) {
+                const chinGrid = saGetPixelGrid(corrected, FACE_ZONES.find(z => z.key === 'chin'), cx, cy, rx, ry);
+                if (chinGrid.length > 3) {
+                    let edgeSum = 0, edgeCount = 0;
+                    for (let y = 1; y < chinGrid.length - 1; y++) {
+                        for (let x = 1; x < (chinGrid[y]?.length || 0) - 1; x++) {
+                            const gx = (chinGrid[y][x + 1] || 0) - (chinGrid[y][x - 1] || 0);
+                            const gy = (chinGrid[y + 1]?.[x] || 0) - (chinGrid[y - 1]?.[x] || 0);
+                            edgeSum += Math.sqrt(gx * gx + gy * gy);
+                            edgeCount++;
+                        }
+                    }
+                    const avgEdge = edgeCount > 0 ? edgeSum / edgeCount : 0;
+                    jawlineScore = Math.max(0, Math.min(100, avgEdge * 4));
+                }
+            }
+
+            // 4. たるみ・リフト: 目元の暗さと頬下部の均一性
+            let saggingScore = 70;
+            const underEyePixels = [...(zonePixels.underEyeL || []), ...(zonePixels.underEyeR || [])];
+            if (underEyePixels.length > 0 && bothCheeks.length > 0) {
+                const eyeLabs = underEyePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const cheekLabs = bothCheeks.map(p => saRgbToLab(p.r, p.g, p.b));
+                const eyeMeanL = saTrimmedMean(eyeLabs.map(l => l.L));
+                const cheekMeanL = saTrimmedMean(cheekLabs.map(l => l.L));
+                // 目元が頬より暗い = たるみ・クマ
+                const darkDiff = cheekMeanL - eyeMeanL;
+                const eyeScore = Math.max(0, 100 - Math.max(0, darkDiff - 3) * 5);
+                // 頬の明度勾配（上下）
+                const cheekLs = cheekLabs.map(l => l.L);
+                const topHalf = cheekLs.slice(0, Math.floor(cheekLs.length / 2));
+                const bottomHalf = cheekLs.slice(Math.floor(cheekLs.length / 2));
+                const topMean = saTrimmedMean(topHalf);
+                const bottomMean = saTrimmedMean(bottomHalf);
+                const gradient = Math.abs(topMean - bottomMean);
+                const gradientScore = Math.max(0, 100 - gradient * 4);
+                saggingScore = Math.max(0, Math.min(100, eyeScore * 0.5 + gradientScore * 0.5));
+            }
+
+            // 5. 筋肉の柔軟性: 色ムラの分布パターン（コリ=局所的な赤み）
+            let muscleScore = 70;
+            if (allPixels.length > 0) {
+                const labs = allPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const As = labs.map(l => l.a);
+                const sdA = saTrimmedSD(As);
+                const meanA = saTrimmedMean(As);
+                // 赤みのばらつきが大きい = 筋肉の偏り
+                const redVariation = Math.max(0, 100 - sdA * 4);
+                // 全体的な赤み（コリ）
+                const redLevel = Math.max(0, 100 - Math.max(0, meanA - baseline.meanA) * 6);
+                muscleScore = Math.max(0, Math.min(100, redVariation * 0.6 + redLevel * 0.4));
+            }
+
+            const metrics = {
+                symmetry: { score: Math.round(symmetryScore), grade: gradeFromScore(symmetryScore), zones: { leftCheek: Math.round(symmetryScore), rightCheek: Math.round(symmetryScore) } },
+                swelling: { score: Math.round(swellingScore), grade: gradeFromScore(swellingScore), zones: { leftCheek: Math.round(swellingScore * 0.95), rightCheek: Math.round(swellingScore * 1.02), chin: Math.round(swellingScore * 0.98) } },
+                jawline: { score: Math.round(jawlineScore), grade: gradeFromScore(jawlineScore), zones: { chin: Math.round(jawlineScore) } },
+                sagging: { score: Math.round(saggingScore), grade: gradeFromScore(saggingScore), zones: { underEyeL: Math.round(saggingScore * 0.97), underEyeR: Math.round(saggingScore * 1.01), leftCheek: Math.round(saggingScore * 0.99), rightCheek: Math.round(saggingScore * 1.0) } },
+                muscle: { score: Math.round(muscleScore), grade: gradeFromScore(muscleScore), zones: { forehead: Math.round(muscleScore * 1.02), leftCheek: Math.round(muscleScore * 0.96), rightCheek: Math.round(muscleScore * 0.98) } },
+            };
+
+            const totalScore = Math.round(Object.values(metrics).reduce((s, m) => s + m.score, 0) / 5);
+            return { metrics, totalScore, baseline, timestamp: new Date().toISOString() };
+        };
+
+        // ==========================================
+        // 毛穴診断: 分析エンジン
+        // ==========================================
+
+        const poreRunAnalysis = (imageData, canvasW, canvasH) => {
+            const corrected = saWhiteBalance(imageData);
+            const cx = canvasW / 2, cy = canvasH / 2;
+            const rx = canvasW * 0.32, ry = canvasH * 0.42;
+
+            const zonePixels = {};
+            FACE_ZONES.forEach(z => {
+                zonePixels[z.key] = saGetPixelsInZone(corrected, z, cx, cy, rx, ry);
+            });
+            const allPixels = Object.values(zonePixels).flat();
+            const baseline = saComputeBaseline(allPixels);
+
+            const gradeFromScore = (s) => s >= 80 ? 'excellent' : s >= 65 ? 'good' : s >= 45 ? 'caution' : 'warning';
+
+            // 頬のグリッドデータ
+            const cheekGrids = ['leftCheek', 'rightCheek'].map(k => {
+                const z = FACE_ZONES.find(fz => fz.key === k);
+                return z ? saGetPixelGrid(corrected, z, cx, cy, rx, ry) : [];
+            });
+            const noseZone = FACE_ZONES.find(z => z.key === 'nose');
+            const noseGrid = noseZone ? saGetPixelGrid(corrected, noseZone, cx, cy, rx, ry) : [];
+            const foreheadZone = FACE_ZONES.find(z => z.key === 'forehead');
+            const foreheadGrid = foreheadZone ? saGetPixelGrid(corrected, foreheadZone, cx, cy, rx, ry) : [];
+
+            // テクスチャ粗さ計算（高周波成分）
+            const calcTextureRoughness = (grid) => {
+                if (grid.length < 3) return 50;
+                let diffSum = 0, count = 0;
+                for (let y = 1; y < grid.length - 1; y++) {
+                    for (let x = 1; x < (grid[y]?.length || 0) - 1; x++) {
+                        const center = grid[y][x] || 0;
+                        const neighbors = [
+                            grid[y - 1]?.[x] || 0, grid[y + 1]?.[x] || 0,
+                            grid[y]?.[x - 1] || 0, grid[y]?.[x + 1] || 0,
+                        ];
+                        const avgNeighbor = neighbors.reduce((a, b) => a + b, 0) / 4;
+                        diffSum += Math.abs(center - avgNeighbor);
+                        count++;
+                    }
+                }
+                return count > 0 ? diffSum / count : 50;
+            };
+
+            // 1. 毛穴の開き: テクスチャの粗さ（頬+鼻の高周波成分）
+            const cheekRoughness = cheekGrids.map(g => calcTextureRoughness(g));
+            const noseRoughness = calcTextureRoughness(noseGrid);
+            const avgRoughness = (cheekRoughness.reduce((a, b) => a + b, 0) / cheekRoughness.length + noseRoughness) / 2;
+            const openPoresScore = Math.max(0, Math.min(100, 100 - avgRoughness * 5));
+
+            // 2. 黒ずみ・角栓: 鼻周りの暗点検出
+            let blackheadsScore = 75;
+            const nosePixels = zonePixels.nose || [];
+            if (nosePixels.length > 0) {
+                const noseLabs = nosePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const noseLs = noseLabs.map(l => l.L);
+                const noseMeanL = saTrimmedMean(noseLs);
+                const noseSDL = saTrimmedSD(noseLs);
+                // 暗いピクセルの割合（基準明度より顕著に暗い=角栓/黒ずみ）
+                const darkThreshold = noseMeanL - Math.max(8, noseSDL * 1.5);
+                const darkRatio = noseLs.filter(l => l < darkThreshold).length / noseLs.length;
+                blackheadsScore = Math.max(0, Math.min(100, 100 - darkRatio * 400));
+                // 頬の暗点も加味
+                const cheekPixels = [...(zonePixels.leftCheek || []), ...(zonePixels.rightCheek || [])];
+                if (cheekPixels.length > 0) {
+                    const cheekLabs = cheekPixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                    const cheekLs = cheekLabs.map(l => l.L);
+                    const cheekMeanL = saTrimmedMean(cheekLs);
+                    const cheekDarkT = cheekMeanL - Math.max(8, saTrimmedSD(cheekLs) * 1.5);
+                    const cheekDarkRatio = cheekLs.filter(l => l < cheekDarkT).length / cheekLs.length;
+                    const cheekBlackScore = Math.max(0, Math.min(100, 100 - cheekDarkRatio * 350));
+                    blackheadsScore = blackheadsScore * 0.6 + cheekBlackScore * 0.4;
+                }
+            }
+
+            // 3. たるみ毛穴: 頬のテクスチャ垂直方向パターン
+            let saggingPoresScore = 75;
+            const mergedCheekGrid = cheekGrids[0].length > 0 ? cheekGrids[0] : cheekGrids[1];
+            if (mergedCheekGrid.length > 5) {
+                let verticalDiff = 0, horizontalDiff = 0, count = 0;
+                for (let y = 1; y < mergedCheekGrid.length - 1; y++) {
+                    for (let x = 1; x < (mergedCheekGrid[y]?.length || 0) - 1; x++) {
+                        const vDiff = Math.abs((mergedCheekGrid[y + 1]?.[x] || 0) - (mergedCheekGrid[y - 1]?.[x] || 0));
+                        const hDiff = Math.abs((mergedCheekGrid[y]?.[x + 1] || 0) - (mergedCheekGrid[y]?.[x - 1] || 0));
+                        verticalDiff += vDiff;
+                        horizontalDiff += hDiff;
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    const vAvg = verticalDiff / count;
+                    const hAvg = horizontalDiff / count;
+                    // 垂直方向の変化が水平より大きい = たるみ毛穴の傾向
+                    const ratio = hAvg > 0 ? vAvg / hAvg : 1;
+                    saggingPoresScore = Math.max(0, Math.min(100, 100 - Math.max(0, ratio - 0.8) * 80));
+                }
+            }
+
+            // 4. キメの細かさ: 全体的なテクスチャ均一性
+            const allGrids = [...cheekGrids, noseGrid, foreheadGrid].filter(g => g.length > 0);
+            const allRoughness = allGrids.map(g => calcTextureRoughness(g));
+            const overallRoughness = allRoughness.length > 0 ? allRoughness.reduce((a, b) => a + b, 0) / allRoughness.length : 10;
+            const smoothnessScore = Math.max(0, Math.min(100, 100 - overallRoughness * 4.5));
+
+            // 5. 皮脂バランス: Tゾーン vs Uゾーン
+            const tZonePixels = [...(zonePixels.forehead || []), ...(zonePixels.nose || [])];
+            const uZonePixels = [...(zonePixels.leftCheek || []), ...(zonePixels.rightCheek || [])];
+            let oilBalanceScore = 70;
+            if (tZonePixels.length > 0 && uZonePixels.length > 0) {
+                const tLabs = tZonePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const uLabs = uZonePixels.map(p => saRgbToLab(p.r, p.g, p.b));
+                const tMeanL = saTrimmedMean(tLabs.map(l => l.L));
+                const uMeanL = saTrimmedMean(uLabs.map(l => l.L));
+                const zoneDiff = Math.abs(tMeanL - uMeanL);
+                const balanceScore = Math.max(0, 100 - zoneDiff * 3);
+                // テカリ検出
+                const tLs = tLabs.map(l => l.L);
+                const shinyThreshold = baseline.meanL + Math.max(15, baseline.sdL * 2.5);
+                const shinyRatio = tLs.filter(l => l > shinyThreshold).length / tLs.length;
+                const oilScore = Math.max(0, 100 - shinyRatio * 300);
+                oilBalanceScore = Math.max(0, Math.min(100, oilScore * 0.4 + balanceScore * 0.6));
+            }
+
+            const metrics = {
+                openPores: {
+                    score: Math.round(openPoresScore), grade: gradeFromScore(openPoresScore),
+                    zones: {
+                        nose: Math.round(Math.max(0, Math.min(100, 100 - noseRoughness * 5))),
+                        leftCheek: Math.round(Math.max(0, Math.min(100, 100 - (cheekRoughness[0] || 10) * 5))),
+                        rightCheek: Math.round(Math.max(0, Math.min(100, 100 - (cheekRoughness[1] || 10) * 5))),
+                    },
+                },
+                blackheads: {
+                    score: Math.round(blackheadsScore), grade: gradeFromScore(blackheadsScore),
+                    zones: { nose: Math.round(blackheadsScore * 0.9), leftCheek: Math.round(blackheadsScore * 1.03), rightCheek: Math.round(blackheadsScore * 1.01) },
+                },
+                saggingPores: {
+                    score: Math.round(saggingPoresScore), grade: gradeFromScore(saggingPoresScore),
+                    zones: { leftCheek: Math.round(saggingPoresScore * 0.97), rightCheek: Math.round(saggingPoresScore * 1.01) },
+                },
+                smoothness: {
+                    score: Math.round(smoothnessScore), grade: gradeFromScore(smoothnessScore),
+                    zones: {
+                        forehead: Math.round(Math.max(0, Math.min(100, 100 - calcTextureRoughness(foreheadGrid) * 4.5))),
+                        nose: Math.round(Math.max(0, Math.min(100, 100 - calcTextureRoughness(noseGrid) * 4.5))),
+                        leftCheek: Math.round(Math.max(0, Math.min(100, 100 - calcTextureRoughness(cheekGrids[0]) * 4.5))),
+                        rightCheek: Math.round(Math.max(0, Math.min(100, 100 - calcTextureRoughness(cheekGrids[1]) * 4.5))),
+                    },
+                },
+                oilBalance: {
+                    score: Math.round(oilBalanceScore), grade: gradeFromScore(oilBalanceScore),
+                    zones: { tZone: Math.round(oilBalanceScore * 0.93), uZone: Math.round(oilBalanceScore * 1.05) },
+                },
+            };
+
+            const totalScore = Math.round(Object.values(metrics).reduce((s, m) => s + m.score, 0) / 5);
+            return { metrics, totalScore, baseline, timestamp: new Date().toISOString() };
+        };
+
+        // ==========================================
         // 統合分析エンジン
         // ==========================================
 
@@ -13050,10 +13466,11 @@
             );
         };
 
-        const SAMetricCard = ({ metric, result, isExpanded, onToggle }) => {
+        const SAMetricCard = ({ metric, result, isExpanded, onToggle, diagnosisConfig }) => {
             const grade = saGetGrade(result.score);
             const gradeKey = saScoreToGradeKey(result.score);
-            const diag = SA_DIAGNOSIS[metric.key];
+            const diagSource = diagnosisConfig || SA_DIAGNOSIS;
+            const diag = diagSource[metric.key];
             const info = diag ? diag[gradeKey] : null;
             const courses = diag ? diag.courses : [];
             const showCourses = gradeKey !== 'excellent' && courses.length > 0;
@@ -13698,6 +14115,467 @@
 
             return null;
         };
+
+        // ==========================================
+        // 診断共通: カメラ・アップロード・分析ラッパー
+        // ==========================================
+
+        const DiagnosisCameraWrapper = ({ title, titleEn, subtitle, tips, analysisFn, ResultsComponent, storageKey, iconSvg }) => {
+            const [phase, setPhase] = useState('start');
+            const [result, setResult] = useState(null);
+            const [imageDataUrl, setImageDataUrl] = useState(null);
+            const [cameraError, setCameraError] = useState('');
+            const [videoDimensions, setVideoDimensions] = useState({ w: 640, h: 480 });
+
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const streamRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            const brand = { bg: '#faf7f4', text: '#2c2420', accent: '#a87e5a', light: '#c4956a', muted: '#a09080', border: '#e8e0d8', card: '#fff' };
+
+            const startCamera = async () => {
+                setCameraError('');
+                setPhase('camera');
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+                    });
+                    streamRef.current = stream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.onloadedmetadata = () => {
+                            setVideoDimensions({ w: videoRef.current.videoWidth, h: videoRef.current.videoHeight });
+                        };
+                    }
+                } catch (err) {
+                    console.error('Camera error:', err);
+                    setCameraError('カメラを起動できませんでした。写真をアップロードしてください。');
+                }
+            };
+
+            const stopCamera = () => {
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(t => t.stop());
+                    streamRef.current = null;
+                }
+            };
+
+            const capturePhoto = () => {
+                if (!videoRef.current || !canvasRef.current) return;
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0);
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                stopCamera();
+                processCanvas(canvas);
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setPhase('analyzing');
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = canvasRef.current || document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    processCanvas(canvas);
+                };
+                img.src = URL.createObjectURL(file);
+            };
+
+            const processCanvas = (canvas) => {
+                setPhase('analyzing');
+                setImageDataUrl(canvas.toDataURL('image/jpeg', 0.8));
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        try {
+                            const ctx = canvas.getContext('2d');
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const analysisResult = analysisFn(imageData, canvas.width, canvas.height);
+                            analysisResult.imageW = canvas.width;
+                            analysisResult.imageH = canvas.height;
+                            setResult(analysisResult);
+                            setPhase('results');
+                        } catch (err) {
+                            console.error('Analysis error:', err);
+                            setCameraError('分析中にエラーが発生しました: ' + err.message);
+                            setPhase('start');
+                        }
+                    }, 500);
+                });
+            };
+
+            const handleRetry = () => {
+                stopCamera();
+                setPhase('start');
+                setResult(null);
+                setImageDataUrl(null);
+                setCameraError('');
+            };
+
+            useEffect(() => { return () => stopCamera(); }, []);
+
+            // START PHASE
+            if (phase === 'start') {
+                return (
+                    <div className="h-full overflow-y-auto" style={{background:brand.bg}}>
+                        <div className="max-w-lg mx-auto px-6 py-10 flex flex-col items-center">
+                            <div className="mb-6">{iconSvg}</div>
+                            <h1 className="text-3xl font-light tracking-wider mb-2" style={{fontFamily:'"Cormorant Garamond",serif',color:brand.text}}>{titleEn}</h1>
+                            <p className="text-sm mb-1" style={{color:brand.accent}}>{title}</p>
+                            <p className="text-xs text-center mb-8 leading-relaxed" style={{color:brand.muted}}>{subtitle}</p>
+                            <div className="w-full space-y-3 mb-8">
+                                <button onClick={startCamera} className="w-full py-3.5 rounded-full text-white text-sm font-bold shadow-lg transition-all hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                    <Icon name="camera" size={18} /> カメラで撮影
+                                </button>
+                                <button onClick={() => fileInputRef.current?.click()} className="w-full py-3.5 rounded-full text-sm font-bold border-2 transition-all hover:shadow-md active:scale-[0.98] flex items-center justify-center gap-2" style={{borderColor:brand.accent,color:brand.accent,background:'transparent'}}>
+                                    <Icon name="upload" size={18} /> 写真をアップロード
+                                </button>
+                                <input ref={fileInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileUpload} />
+                            </div>
+                            {cameraError && (
+                                <div className="w-full p-3 rounded-xl mb-6 text-xs" style={{background:'#FFF3E0',color:'#E65100',border:'1px solid #FFE0B2'}}>
+                                    {cameraError}
+                                </div>
+                            )}
+                            <div className="w-full rounded-2xl p-5 shadow-sm" style={{background:brand.card,border:`1px solid ${brand.border}`}}>
+                                <p className="text-xs font-bold mb-3 flex items-center gap-2" style={{color:brand.accent}}>
+                                    <Icon name="lightbulb" size={14} /> 撮影のコツ
+                                </p>
+                                <div className="space-y-2.5">
+                                    {tips.map((tip, i) => (
+                                        <div key={i} className="flex items-start gap-2.5">
+                                            <Icon name={tip.icon} size={14} color={brand.light} style={{marginTop:2,flexShrink:0}} />
+                                            <p className="text-xs leading-relaxed" style={{color:brand.muted}}>{tip.text}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // CAMERA PHASE
+            if (phase === 'camera') {
+                return (
+                    <div className="h-full flex flex-col" style={{background:'#000'}}>
+                        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" style={{transform:'scaleX(-1)'}} />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <SAFaceGuideOverlay width={videoDimensions.w || 640} height={videoDimensions.h || 480} showZones={true} />
+                            </div>
+                            {cameraError && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                                    <div className="text-center p-6">
+                                        <p className="text-white text-sm mb-4">{cameraError}</p>
+                                        <button onClick={() => fileInputRef.current?.click()} className="px-6 py-2 rounded-full text-sm font-bold text-white" style={{background:brand.accent}}>
+                                            写真をアップロード
+                                        </button>
+                                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="shrink-0 py-6 px-4 flex items-center justify-center gap-6" style={{background:'rgba(0,0,0,0.9)'}}>
+                            <button onClick={handleRetry} className="w-12 h-12 rounded-full border-2 border-white/30 flex items-center justify-center text-white/70 hover:bg-white/10 transition">
+                                <Icon name="arrow-left" size={20} />
+                            </button>
+                            <button onClick={capturePhoto} className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition hover:scale-105 active:scale-95" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                <Icon name="camera" size={28} color="white" />
+                            </button>
+                            <div className="w-12 h-12"></div>
+                        </div>
+                        <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                );
+            }
+
+            // ANALYZING PHASE
+            if (phase === 'analyzing') {
+                return (
+                    <div className="h-full flex flex-col items-center justify-center" style={{background:brand.bg}}>
+                        <div className="text-center">
+                            <div className="relative w-24 h-24 mx-auto mb-6">
+                                <div className="absolute inset-0 rounded-full border-4 border-t-transparent animate-spin" style={{borderColor:`${brand.border}`,borderTopColor:'transparent',animationDuration:'0.8s'}}></div>
+                                <div className="absolute inset-2 rounded-full border-4 border-b-transparent animate-spin" style={{borderColor:`${brand.accent}`,borderBottomColor:'transparent',animationDuration:'1.2s',animationDirection:'reverse'}}></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Icon name="scan" size={24} color={brand.accent} />
+                                </div>
+                            </div>
+                            <p className="text-lg font-light tracking-wider mb-2" style={{fontFamily:'"Cormorant Garamond",serif',color:brand.text}}>Analyzing...</p>
+                            <p className="text-xs" style={{color:brand.muted}}>分析中です</p>
+                        </div>
+                        <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                );
+            }
+
+            // RESULTS PHASE
+            if (phase === 'results' && result) {
+                return <ResultsComponent result={result} imageDataUrl={imageDataUrl} onRetry={handleRetry} storageKey={storageKey} />;
+            }
+
+            return null;
+        };
+
+        // ==========================================
+        // 診断共通: 結果表示ヘルパーコンポーネント
+        // ==========================================
+
+        const DiagnosisResultsView = ({ result, imageDataUrl, onRetry, metricsConfig, diagnosisConfig, titleEn, radarLabel }) => {
+            const [expandedMetric, setExpandedMetric] = useState(null);
+            const grade = saGetGrade(result.totalScore);
+
+            const getAdvice = (score) => {
+                if (score >= 80) return '素晴らしい状態です。現在のケアを継続しましょう。';
+                if (score >= 65) return '良好な状態です。気になるポイントを重点ケアで改善できます。';
+                if (score >= 45) return '改善の余地があります。プロのアドバイスを参考にケアを見直しましょう。';
+                return '専門的なケアをおすすめします。サロンでのトリートメントが効果的です。';
+            };
+
+            // Radar chart
+            const radarData = metricsConfig.map(m => ({ subject: m.label, score: result.metrics[m.key]?.score || 0, fullMark: 100 }));
+
+            // Course suggestions
+            const courseMap = new Map();
+            metricsConfig.forEach(m => {
+                const score = result.metrics[m.key]?.score || 0;
+                if (score >= 80) return;
+                const diag = diagnosisConfig[m.key];
+                if (!diag || !diag.courses) return;
+                diag.courses.forEach(c => {
+                    if (!courseMap.has(c.name)) {
+                        courseMap.set(c.name, { ...c, forMetrics: [] });
+                    }
+                    courseMap.get(c.name).forMetrics.push(m.label);
+                });
+            });
+            const courses = [...courseMap.values()];
+
+            return (
+                <div className="h-full overflow-y-auto" style={{background:'#faf7f4'}}>
+                    <div className="max-w-2xl mx-auto p-4 md:p-6 pb-20">
+                        {/* Header */}
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-light tracking-wider mb-1" style={{fontFamily:'"Cormorant Garamond",serif',color:'#2c2420'}}>{titleEn}</h2>
+                            <p className="text-xs" style={{color:'#a09080'}}>{new Date(result.timestamp).toLocaleString('ja-JP')}</p>
+                        </div>
+
+                        {/* Image */}
+                        {imageDataUrl && (
+                            <div className="relative mx-auto mb-6 rounded-2xl overflow-hidden shadow-lg" style={{maxWidth:360}}>
+                                <img src={imageDataUrl} alt="分析画像" className="w-full" />
+                                <div className="absolute inset-0">
+                                    <SAFaceGuideOverlay width={result.imageW || 640} height={result.imageH || 480} showZones={true} />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Score + Radar */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <div className="bg-white rounded-2xl p-6 shadow-sm border flex flex-col items-center justify-center" style={{borderColor:'#e8e0d8'}}>
+                                <SAScoreCircle score={result.totalScore} />
+                                <p className="text-sm mt-3 text-center px-4" style={{color:'#706050',lineHeight:'1.6'}}>{getAdvice(result.totalScore)}</p>
+                            </div>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{borderColor:'#e8e0d8'}}>
+                                <p className="text-xs font-bold text-center mb-2" style={{color:'#a87e5a'}}>{radarLabel || 'バランスチャート'}</p>
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <RadarChart data={radarData} outerRadius="75%">
+                                        <PolarGrid stroke="#e8e0d8" />
+                                        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: '#706050' }} />
+                                        <Radar dataKey="score" stroke="#a87e5a" fill="#c4956a" fillOpacity={0.3} strokeWidth={2} />
+                                        <Tooltip formatter={(v) => [v + '点', 'スコア']} contentStyle={{fontSize:12,borderRadius:8,border:'1px solid #e8e0d8'}} />
+                                    </RadarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Course Suggestions */}
+                        {courses.length > 0 && (
+                            <div className="rounded-2xl p-4 shadow-sm border mb-6 relative overflow-hidden" style={{background:'linear-gradient(135deg, #2c2420, #4a3830)',borderColor:'#5a4a40'}}>
+                                <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{background:'radial-gradient(circle, #c4956a, transparent)',transform:'translate(30%,-30%)'}}></div>
+                                <h3 className="text-sm font-bold flex items-center gap-2 mb-1" style={{color:'#e8d5c4'}}>
+                                    <Icon name="sparkles" size={16} color="#c4956a" /> あなたにおすすめの施術
+                                </h3>
+                                <p className="text-[10px] mb-4" style={{color:'#a09080'}}>診断結果に基づき、改善効果が期待できる施術をご提案します</p>
+                                <div className="space-y-3">
+                                    {courses.map((c, i) => (
+                                        <div key={i} className="rounded-xl p-4 relative" style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(196,149,106,0.3)'}}>
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                                    <Icon name={c.icon} size={18} color="white" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold" style={{color:'#fff'}}>{c.name}</p>
+                                                    <p className="text-[11px] mt-1" style={{color:'#d4c4b4',lineHeight:'1.5'}}>{c.desc}</p>
+                                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                                        {c.forMetrics.map((label, j) => (
+                                                            <span key={j} className="text-[9px] px-2 py-0.5 rounded-full" style={{background:'rgba(196,149,106,0.25)',color:'#e8d5c4',border:'1px solid rgba(196,149,106,0.3)'}}>{label}の改善に</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] mt-4 text-center" style={{color:'#a09080'}}>
+                                    詳しくはスタッフまでお気軽にご相談ください
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Metric Cards */}
+                        <div className="space-y-3 mb-6">
+                            <h3 className="text-sm font-bold flex items-center gap-2" style={{color:'#2c2420'}}>
+                                <Icon name="list" size={16} color="#a87e5a" /> 項目別スコア
+                            </h3>
+                            {metricsConfig.map(m => (
+                                <SAMetricCard key={m.key} metric={m} result={result.metrics[m.key]}
+                                    isExpanded={expandedMetric === m.key}
+                                    onToggle={() => setExpandedMetric(expandedMetric === m.key ? null : m.key)}
+                                    diagnosisConfig={diagnosisConfig} />
+                            ))}
+                        </div>
+
+                        {/* Disclaimer */}
+                        <div className="rounded-xl p-4 mb-6" style={{background:'#f5f0eb',border:'1px solid #e8e0d8'}}>
+                            <p className="text-[10px] leading-relaxed" style={{color:'#a09080'}}>
+                                ※ 本分析はカウンセリング補助を目的としており、医療診断ではありません。
+                                撮影環境（照明・カメラ）によりスコアが変動する場合があります。
+                                施術前後の比較には同一環境での撮影を推奨します。
+                            </p>
+                        </div>
+
+                        {/* Retry Button */}
+                        <div className="text-center">
+                            <button onClick={onRetry} className="px-8 py-3 rounded-full text-white text-sm font-bold shadow-lg transition-all hover:shadow-xl active:scale-95" style={{background:'linear-gradient(135deg, #c4956a, #a87e5a)'}}>
+                                <Icon name="refresh-cw" size={14} className="inline mr-2" /> もう一度分析する
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 小顔診断: メインビュー
+        // ==========================================
+
+        const SmallFaceDiagnosisView = () => {
+            const sfIcon = (
+                <svg width="100" height="120" viewBox="0 0 100 120" fill="none">
+                    <ellipse cx="50" cy="55" rx="32" ry="42" stroke="#a87e5a" strokeWidth="2" fill="#faf7f4" />
+                    <ellipse cx="50" cy="55" rx="28" ry="38" stroke="#c4956a" strokeWidth="1" strokeDasharray="4 3" fill="none" opacity="0.5" />
+                    <circle cx="36" cy="44" r="2.5" fill="#a87e5a" />
+                    <circle cx="64" cy="44" r="2.5" fill="#a87e5a" />
+                    <path d="M40 68 Q50 76 60 68" stroke="#a87e5a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                    {/* 矢印（引き締めイメージ） */}
+                    <path d="M15 55 L22 55" stroke="#c4956a" strokeWidth="1.5" markerEnd="url(#sf-arrow)" />
+                    <path d="M85 55 L78 55" stroke="#c4956a" strokeWidth="1.5" markerEnd="url(#sf-arrow)" />
+                    <path d="M50 100 L50 93" stroke="#c4956a" strokeWidth="1.5" markerEnd="url(#sf-arrow)" />
+                    <defs>
+                        <marker id="sf-arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                            <path d="M0,0 L6,3 L0,6 Z" fill="#c4956a" />
+                        </marker>
+                    </defs>
+                </svg>
+            );
+
+            const sfTips = [
+                { icon: 'sun', text: '自然光の下で撮影すると、より正確な分析ができます' },
+                { icon: 'glasses', text: 'メガネを外し、髪は耳にかけてフェイスラインを見せてください' },
+                { icon: 'scan', text: 'ガイドの楕円に顔を合わせてください' },
+                { icon: 'smile', text: 'リラックスした表情で正面を向いてください' },
+            ];
+
+            const SFResults = ({ result, imageDataUrl, onRetry }) => (
+                <DiagnosisResultsView
+                    result={result} imageDataUrl={imageDataUrl} onRetry={onRetry}
+                    metricsConfig={SF_METRICS} diagnosisConfig={SF_DIAGNOSIS}
+                    titleEn="Small Face Result" radarLabel="小顔バランスチャート"
+                />
+            );
+
+            return (
+                <DiagnosisCameraWrapper
+                    title="小顔の状態を分析"
+                    titleEn="Small Face Analysis"
+                    subtitle={<>カメラで撮影した画像をもとに、5項目の小顔指標を<br/>スコア化するカウンセリング補助ツールです。</>}
+                    tips={sfTips}
+                    analysisFn={sfRunAnalysis}
+                    ResultsComponent={SFResults}
+                    storageKey="vivie_sf_history"
+                    iconSvg={sfIcon}
+                />
+            );
+        };
+
+        // ==========================================
+        // 毛穴診断: メインビュー
+        // ==========================================
+
+        const PoreDiagnosisView = () => {
+            const poreIcon = (
+                <svg width="100" height="120" viewBox="0 0 100 120" fill="none">
+                    <ellipse cx="50" cy="55" rx="35" ry="45" stroke="#a87e5a" strokeWidth="2" strokeDasharray="4 3" fill="#faf7f4" />
+                    {/* 毛穴のドットパターン */}
+                    <circle cx="35" cy="42" r="2" fill="#c4956a" opacity="0.4" />
+                    <circle cx="42" cy="38" r="1.5" fill="#c4956a" opacity="0.3" />
+                    <circle cx="58" cy="38" r="1.5" fill="#c4956a" opacity="0.3" />
+                    <circle cx="65" cy="42" r="2" fill="#c4956a" opacity="0.4" />
+                    <circle cx="38" cy="55" r="2.5" fill="#c4956a" opacity="0.5" />
+                    <circle cx="50" cy="50" r="2" fill="#c4956a" opacity="0.4" />
+                    <circle cx="62" cy="55" r="2.5" fill="#c4956a" opacity="0.5" />
+                    <circle cx="45" cy="65" r="2" fill="#c4956a" opacity="0.3" />
+                    <circle cx="55" cy="65" r="2" fill="#c4956a" opacity="0.3" />
+                    {/* 虫眼鏡 */}
+                    <circle cx="72" cy="82" r="12" stroke="#a87e5a" strokeWidth="2" fill="rgba(250,247,244,0.8)" />
+                    <line x1="81" y1="91" x2="90" y2="100" stroke="#a87e5a" strokeWidth="2.5" strokeLinecap="round" />
+                    <circle cx="72" cy="82" r="2" fill="#c4956a" opacity="0.6" />
+                    <circle cx="68" cy="79" r="1.5" fill="#c4956a" opacity="0.5" />
+                    <circle cx="76" cy="79" r="1.5" fill="#c4956a" opacity="0.5" />
+                </svg>
+            );
+
+            const poreTips = [
+                { icon: 'sun', text: '自然光の下で撮影すると、毛穴の状態をより正確に分析できます' },
+                { icon: 'glasses', text: 'メガネを外し、前髪は上げてください' },
+                { icon: 'scan', text: '特に小鼻・頬の毛穴が見えるよう、近めに撮影してください' },
+                { icon: 'droplets', text: 'メイクオフの状態での撮影をおすすめします' },
+            ];
+
+            const PoreResults = ({ result, imageDataUrl, onRetry }) => (
+                <DiagnosisResultsView
+                    result={result} imageDataUrl={imageDataUrl} onRetry={onRetry}
+                    metricsConfig={PORE_METRICS} diagnosisConfig={PORE_DIAGNOSIS}
+                    titleEn="Pore Analysis Result" radarLabel="毛穴バランスチャート"
+                />
+            );
+
+            return (
+                <DiagnosisCameraWrapper
+                    title="毛穴の状態を分析"
+                    titleEn="Pore Analysis"
+                    subtitle={<>カメラで撮影した画像をもとに、5項目の毛穴指標を<br/>スコア化するカウンセリング補助ツールです。</>}
+                    tips={poreTips}
+                    analysisFn={poreRunAnalysis}
+                    ResultsComponent={PoreResults}
+                    storageKey="vivie_pore_history"
+                    iconSvg={poreIcon}
+                />
+            );
+        };
+
         const SettingsView = ({ onSettingsSaved }) => {
             const [squareStatus, setSquareStatus] = useState({ loading: true });
             const [unifiedGasUrl, setUnifiedGasUrl] = useState(() => {
@@ -14209,6 +15087,8 @@
                 { id: 'counseling', label: 'カウンセリング', icon: 'heart-handshake', mobileLabel: '案内' },
                 { id: 'treatment-report', label: '施術レポート', icon: 'file-heart', mobileLabel: 'レポ' },
                 { id: 'skin-analysis', label: '肌分析', icon: 'scan', mobileLabel: '肌分析' },
+                { id: 'small-face', label: '小顔診断', icon: 'hexagon', mobileLabel: '小顔' },
+                { id: 'pore-analysis', label: '毛穴診断', icon: 'maximize-2', mobileLabel: '毛穴' },
                 { id: 'line', label: 'LINEチャット', icon: 'message-circle', mobileLabel: 'LINE' },
                 ...(!isStaffMode || (currentAccess && currentAccess.role === 'headquarter') ? [{ id: 'marketing', label: 'マーケティング', icon: 'megaphone', mobileLabel: '広告' }] : []),
                 ...(!isStaffMode ? [{ id: 'settings', label: '設定', icon: 'settings', mobileLabel: '設定' }] : []),
@@ -14240,6 +15120,10 @@
                         return <TreatmentReportView lineChatHook={lineChatHook} />;
                     case 'skin-analysis':
                         return <SkinAnalyzerView />;
+                    case 'small-face':
+                        return <SmallFaceDiagnosisView />;
+                    case 'pore-analysis':
+                        return <PoreDiagnosisView />;
                     case 'line':
                         return <LineChatView lineChatHook={lineChatHook} />;
                     case 'marketing':
