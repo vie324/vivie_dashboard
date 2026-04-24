@@ -40,6 +40,12 @@
     <!-- html2canvas (for Treatment Report screenshot) -->
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
+    <!-- Supabase JS SDK (Phase 2: データ層移行) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- LINE LIFF SDK (カウンセリングフォームの LINE 連携) -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
     <!-- Custom Config for Tailwind (vivie Theme - Enhanced) -->
     <script>
         tailwind.config = {
@@ -1223,41 +1229,353 @@
         fetchSquareConfig();
 
         // ========================================
+        // Supabase クライアント
+        // ========================================
+        // URL と anon key は localStorage 経由で設定する (設定画面から入力)
+        // service_role key は絶対にクライアントに出さない (Vercel サーバサイド限定)
+
+        const SUPABASE_CONFIG_KEY = 'vivie_supabase_config';
+        const LIFF_CONFIG_KEY = 'vivie_liff_id';
+
+        const loadSupabaseConfig = () => {
+            try {
+                const raw = localStorage.getItem(SUPABASE_CONFIG_KEY);
+                if (!raw) return { url: '', anonKey: '' };
+                const parsed = JSON.parse(raw);
+                return { url: parsed.url || '', anonKey: parsed.anonKey || '' };
+            } catch (e) { return { url: '', anonKey: '' }; }
+        };
+
+        const saveSupabaseConfig = (cfg) => {
+            localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({
+                url: (cfg.url || '').trim().replace(/\/$/, ''),
+                anonKey: (cfg.anonKey || '').trim()
+            }));
+        };
+
+        const loadLiffId = () => localStorage.getItem(LIFF_CONFIG_KEY) || '';
+        const saveLiffId = (id) => {
+            const v = (id || '').trim();
+            if (v) localStorage.setItem(LIFF_CONFIG_KEY, v);
+            else localStorage.removeItem(LIFF_CONFIG_KEY);
+        };
+
+        // 遅延初期化する Supabase クライアント (設定未入力でもアプリは動く)
+        let _supabaseClient = null;
+        let _supabaseConfigCache = null;
+        const getSupabase = () => {
+            if (!window.supabase) return null;
+            const cfg = loadSupabaseConfig();
+            if (!cfg.url || !cfg.anonKey) return null;
+            const cacheKey = cfg.url + '|' + cfg.anonKey;
+            if (_supabaseClient && _supabaseConfigCache === cacheKey) return _supabaseClient;
+            try {
+                _supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
+                    auth: { persistSession: false },
+                    realtime: { params: { eventsPerSecond: 5 } }
+                });
+                _supabaseConfigCache = cacheKey;
+                return _supabaseClient;
+            } catch (e) {
+                console.error('[Supabase] createClient failed:', e);
+                return null;
+            }
+        };
+
+        const isSupabaseReady = () => {
+            const cfg = loadSupabaseConfig();
+            return !!(window.supabase && cfg.url && cfg.anonKey);
+        };
+
+        // 接続診断: public テーブル (stores) に select 一発打つ
+        const diagnoseSupabase = async () => {
+            const cfg = loadSupabaseConfig();
+            const out = { url: !!cfg.url, anonKey: !!cfg.anonKey, sdkLoaded: !!window.supabase, canConnect: false, tables: {}, error: null };
+            if (!cfg.url || !cfg.anonKey) { out.error = 'URL または anon key が未入力です'; return out; }
+            if (!window.supabase) { out.error = 'Supabase SDK が読み込まれていません'; return out; }
+            const client = getSupabase();
+            if (!client) { out.error = 'クライアント初期化に失敗'; return out; }
+            try {
+                // 1. stores (anon で active=true を読める想定)
+                const { data: stores, error: err1 } = await client.from('stores').select('id, name, active').limit(5);
+                out.tables.stores = err1 ? { ok: false, error: err1.message } : { ok: true, count: (stores || []).length };
+                // 2. counseling_form_definitions (active=true を読める想定)
+                const { data: forms, error: err2 } = await client.from('counseling_form_definitions').select('version, title, active').eq('active', true).limit(1);
+                out.tables.counseling_form_definitions = err2 ? { ok: false, error: err2.message } : { ok: true, version: forms && forms[0] ? forms[0].version : null };
+                out.canConnect = out.tables.stores.ok || out.tables.counseling_form_definitions.ok;
+            } catch (e) {
+                out.error = e.message || String(e);
+            }
+            return out;
+        };
+
+        // LIFF 初期化 (呼び出し時に遅延ロード)
+        let _liffInitPromise = null;
+        const initLiff = () => {
+            const liffId = loadLiffId();
+            if (!liffId) return Promise.resolve({ ok: false, reason: 'LIFF ID 未設定' });
+            if (!window.liff) return Promise.resolve({ ok: false, reason: 'LIFF SDK 未ロード' });
+            if (_liffInitPromise) return _liffInitPromise;
+            _liffInitPromise = window.liff.init({ liffId })
+                .then(() => ({ ok: true, inClient: window.liff.isInClient(), loggedIn: window.liff.isLoggedIn() }))
+                .catch(err => ({ ok: false, reason: err && err.message ? err.message : 'init failed' }));
+            return _liffInitPromise;
+        };
+
+        // ========================================
+        // セキュリティヘルパー (Web Crypto)
+        // ========================================
+        // 設計方針:
+        //  - パスワード平文を保存しない / 送信は HTTPS の都度のみ
+        //  - 認証は PBKDF2-SHA256(client) → GAS 側で pepper 付き SHA-256 比較
+        //  - PII の localStorage は AES-GCM で暗号化（鍵はパスワード派生で sessionStorage 保持）
+        //  - アクセストークンは GAS 側 HMAC-SHA256 署名 + 有効期限 (exp)
+
+        const PBKDF2_ITER = 210000;       // OWASP 2023 推奨値
+        const PBKDF2_SALT_BYTES = 16;
+        const PBKDF2_KEY_BYTES = 32;
+        const AES_KEY_SESSION = 'vivie_data_key_v1';
+        const AUTH_VERIFIED_SESSION = 'vivie_pw_verified';
+
+        const _bufToB64 = (buf) => {
+            const bytes = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+            return btoa(bin);
+        };
+        const _b64ToBuf = (b64) => {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes;
+        };
+        const _b64UrlDecode = (s) => {
+            let b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4) b64 += '=';
+            return atob(b64);
+        };
+        const _randBytes = (n) => {
+            const a = new Uint8Array(n);
+            crypto.getRandomValues(a);
+            return a;
+        };
+
+        // 定数時間比較（タイミング攻撃対策）
+        const constantTimeEqual = (a, b) => {
+            if (typeof a !== 'string' || typeof b !== 'string') return false;
+            if (a.length !== b.length) return false;
+            let diff = 0;
+            for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+            return diff === 0;
+        };
+
+        // パスワード → 認証用ハッシュ（クライアント側 stretching）
+        // 戻り値の authKey をそのまま GAS に送信し、GAS 側で pepper 付き SHA-256 と比較する
+        const derivePasswordAuthKey = async (password, saltB64) => {
+            const enc = new TextEncoder();
+            const baseKey = await crypto.subtle.importKey(
+                'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+            );
+            const salt = _b64ToBuf(saltB64);
+            const bits = await crypto.subtle.deriveBits(
+                { name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+                baseKey, PBKDF2_KEY_BYTES * 8
+            );
+            return _bufToB64(bits);
+        };
+
+        // パスワード → AES-GCM データ暗号化鍵 (PII 用)。同じ password でも auth とは別ドメイン
+        const deriveDataKey = async (password, saltB64) => {
+            const enc = new TextEncoder();
+            const salted = enc.encode('vivie-data-v1:' + atob(saltB64.replace(/-/g, '+').replace(/_/g, '/')));
+            const baseKey = await crypto.subtle.importKey(
+                'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits', 'deriveKey']
+            );
+            const salt = await crypto.subtle.digest('SHA-256', salted);
+            return crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+                baseKey,
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+        };
+
+        const newPasswordSalt = () => _bufToB64(_randBytes(PBKDF2_SALT_BYTES));
+
+        // === セッション内キャッシュ: AES データ鍵 (raw bytes をエクスポートして sessionStorage 保持) ===
+        let _cachedAesKey = null;
+        const setSessionDataKey = async (cryptoKey) => {
+            _cachedAesKey = cryptoKey;
+            try {
+                const raw = await crypto.subtle.exportKey('raw', cryptoKey);
+                sessionStorage.setItem(AES_KEY_SESSION, _bufToB64(raw));
+            } catch (e) { /* ignore */ }
+        };
+        const getSessionDataKey = async () => {
+            if (_cachedAesKey) return _cachedAesKey;
+            const raw = sessionStorage.getItem(AES_KEY_SESSION);
+            if (!raw) return null;
+            try {
+                _cachedAesKey = await crypto.subtle.importKey(
+                    'raw', _b64ToBuf(raw), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']
+                );
+                return _cachedAesKey;
+            } catch (e) { return null; }
+        };
+        const clearSessionDataKey = () => {
+            _cachedAesKey = null;
+            try { sessionStorage.removeItem(AES_KEY_SESSION); } catch (e) {}
+            try { sessionStorage.removeItem(AUTH_VERIFIED_SESSION); } catch (e) {}
+        };
+
+        // AES-GCM 暗号化 / 復号 (UTF-8 文字列 ↔ "v1:iv:cipher" base64 形式)
+        const aesEncrypt = async (plaintext, key) => {
+            const iv = _randBytes(12);
+            const enc = new TextEncoder();
+            const cipher = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv }, key, enc.encode(plaintext)
+            );
+            return 'v1:' + _bufToB64(iv) + ':' + _bufToB64(cipher);
+        };
+        const aesDecrypt = async (envelope, key) => {
+            if (!envelope || typeof envelope !== 'string' || !envelope.startsWith('v1:')) {
+                throw new Error('not-encrypted');
+            }
+            const parts = envelope.split(':');
+            if (parts.length !== 3) throw new Error('bad-envelope');
+            const iv = _b64ToBuf(parts[1]);
+            const cipher = _b64ToBuf(parts[2]);
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+            return new TextDecoder().decode(plain);
+        };
+
+        // === PII セーフストレージ: localStorage を AES-GCM で透過暗号化するラッパー ===
+        // 鍵が無い場合は読み書きを no-op にする（ログイン前 / パスワード未設定スタッフ）
+        // レガシー平文データは初回読込時に自動再暗号化する（ベストエフォート）
+        const secureStore = {
+            isReady: () => !!_cachedAesKey || !!sessionStorage.getItem(AES_KEY_SESSION),
+            get: async (key, fallback) => {
+                const raw = localStorage.getItem(key);
+                if (raw == null) return fallback;
+                if (raw.startsWith('v1:')) {
+                    const dataKey = await getSessionDataKey();
+                    if (!dataKey) return fallback;
+                    try { return JSON.parse(await aesDecrypt(raw, dataKey)); }
+                    catch (e) { console.warn('[secureStore] decrypt failed for', key); return fallback; }
+                }
+                // レガシー平文 → 復号して即時再暗号化
+                try {
+                    const parsed = JSON.parse(raw);
+                    const dataKey = await getSessionDataKey();
+                    if (dataKey) {
+                        try {
+                            const env = await aesEncrypt(JSON.stringify(parsed), dataKey);
+                            localStorage.setItem(key, env);
+                        } catch (e) { /* ignore */ }
+                    } else {
+                        // 鍵が無い間は平文を消す（共有端末で次のスタッフに見えないよう）
+                        localStorage.removeItem(key);
+                        return fallback;
+                    }
+                    return parsed;
+                } catch (e) { return fallback; }
+            },
+            set: async (key, value) => {
+                const dataKey = await getSessionDataKey();
+                if (!dataKey) {
+                    // 鍵が無いときは保存しない（GAS が真実の永続層）
+                    try { localStorage.removeItem(key); } catch (e) {}
+                    return false;
+                }
+                try {
+                    const env = await aesEncrypt(JSON.stringify(value), dataKey);
+                    localStorage.setItem(key, env);
+                    return true;
+                } catch (e) { console.warn('[secureStore] encrypt failed for', key); return false; }
+            },
+            remove: (key) => { try { localStorage.removeItem(key); } catch (e) {} },
+        };
+
+        // ========================================
         // スタッフ・アクセス管理
         // ========================================
 
         const STAFF_STORAGE_KEY = 'vivie_staff_config';
+        const TOKEN_DEFAULT_TTL_DAYS = 30;
 
-        // URLパラメータからアクセス情報をデコード
+        // GAS POST 内部関数の前方参照用 (gasPostRequest は後ろで定義されるため lazy 呼び出し)
+        const _callGas = async (body) => {
+            const gasUrl = localStorage.getItem('vivie_unified_gas_url') || UNIFIED_GAS_URL;
+            if (!gasUrl) return null;
+            try {
+                const resp = await fetch(gasUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(body)
+                });
+                return await resp.json();
+            } catch (e) { return null; }
+        };
+
+        // URLパラメータからアクセス情報を「楽観的に」デコード（署名検証はサーバ側で別途実施）
+        // 旧形式 (単一 base64) は受け付けず、移行を促す
         const parseAccessFromUrl = () => {
             const params = new URLSearchParams(window.location.search);
             const token = params.get('v');
             if (!token) return null;
+            // 新形式は payload と signature が "." で連結されている
+            if (!token.includes('.')) {
+                return { invalid: true, reason: 'legacy', token };
+            }
             try {
-                const json = decodeURIComponent(escape(atob(token)));
+                const [payloadB64] = token.split('.');
+                const json = _b64UrlDecode(payloadB64);
                 const decoded = JSON.parse(json);
+                // ローカル exp チェック（クロック差±5分許容）
+                const nowSec = Math.floor(Date.now() / 1000);
+                if (decoded.exp && decoded.exp + 300 < nowSec) {
+                    return { invalid: true, reason: 'expired', token };
+                }
                 return {
                     name: decoded.n || '不明',
                     role: decoded.r || 'staff',
                     storeIds: decoded.sid || [],
                     hasPassword: !!decoded.pw,
                     staffId: decoded.id || '',
+                    iat: decoded.iat || 0,
+                    exp: decoded.exp || 0,
+                    raw: token,
+                    signatureVerified: false,
                 };
             } catch (e) {
                 console.warn('Invalid access token');
-                return null;
+                return { invalid: true, reason: 'malformed', token };
             }
         };
 
-        // アクセストークン生成（UTF-8対応）
-        const generateStaffToken = (staff) => {
-            const payload = { n: staff.name, r: staff.role, sid: staff.storeIds, pw: staff.password ? 1 : 0, id: staff.id };
-            return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+        // GAS にトークン署名検証を依頼（サーバ側で HMAC 検証）
+        const verifyTokenWithGas = async (token) => {
+            const result = await _callGas({ type: 'authToken', action: 'verify', token });
+            if (!result) return { ok: false, reason: 'network' };
+            return { ok: !!result.ok, reason: result.reason, payload: result.payload };
         };
 
-        // スタッフ用URL生成
-        const generateStaffUrl = (staff) => {
-            const token = generateStaffToken(staff);
+        // GAS にトークン発行を依頼（鍵は GAS PropertiesService に保存）
+        // staffId と TTL を渡すと、サーバ側で staff データを引いて署名済みトークンを返す
+        const requestSignedToken = async (staffId, ttlDays) => {
+            const result = await _callGas({
+                type: 'authToken', action: 'sign',
+                staffId, ttlDays: ttlDays || TOKEN_DEFAULT_TTL_DAYS
+            });
+            if (!result || !result.ok) return null;
+            return result.token;
+        };
+
+        // スタッフ用URL生成（GAS 経由で署名取得）
+        const generateStaffUrl = async (staff, ttlDays) => {
+            const token = await requestSignedToken(staff.id, ttlDays);
+            if (!token) return null;
             const base = window.location.origin + window.location.pathname;
             return `${base}?v=${token}`;
         };
@@ -1353,21 +1671,72 @@
         const deleteHpbMonthGas = async (yearMonth) => gasPostRequest({ type: 'hpb', action: 'delete', yearMonth });
         const saveHpbAllGas = async (monthly) => gasPostRequest({ type: 'hpb', action: 'saveAll', monthly });
 
-        // パスワード検証（URLアクセス時のスタッフ照合）
+        // パスワード検証 (URLアクセス時のスタッフ照合)
+        // クライアント: PBKDF2-SHA256 で stretching → GAS に authKey 送信
+        // GAS: pepper 付き SHA-256 で照合 → OK なら成功
+        // 成功時に AES データ鍵を派生して sessionStorage に保持
         const verifyStaffPassword = async (staffId, password) => {
-            // まずGASから最新のスタッフリストを取得
-            const gasStaff = await fetchStaffFromGas();
-            // GASが空配列やnullの場合、localStorageにフォールバック
-            const list = (gasStaff && gasStaff.length > 0) ? gasStaff : loadStaffList();
-            const staff = list.find(s => s.id === staffId);
-            if (!staff) return { ok: false, reason: 'スタッフが見つかりません' };
-            if (!staff.password) return { ok: true }; // パスワード未設定なら通過
-            if (staff.password === password) return { ok: true };
-            return { ok: false, reason: 'パスワードが正しくありません' };
+            if (!staffId || !password) return { ok: false, reason: '入力情報が不足しています' };
+            // GAS からそのスタッフの passwordSalt を取得
+            const saltResp = await _callGas({ type: 'auth', action: 'getSalt', staffId });
+            if (!saltResp || !saltResp.ok) {
+                return { ok: false, reason: saltResp && saltResp.reason ? saltResp.reason : 'サーバとの通信に失敗しました' };
+            }
+            // 旧形式 (平文 password が残っているスタッフ) はリセットを促す
+            if (saltResp.legacy) {
+                return { ok: false, reason: 'パスワードの再設定が必要です。管理者にご連絡ください。' };
+            }
+            if (!saltResp.salt) {
+                // パスワード未設定 → 通過 (鍵なしモード: PII キャッシュは無効)
+                clearSessionDataKey();
+                return { ok: true, noKey: true };
+            }
+            try {
+                const authKey = await derivePasswordAuthKey(password, saltResp.salt);
+                const verifyResp = await _callGas({ type: 'auth', action: 'verify', staffId, authKey });
+                if (!verifyResp || !verifyResp.ok) {
+                    return { ok: false, reason: (verifyResp && verifyResp.reason) || 'パスワードが正しくありません' };
+                }
+                // AES データ鍵を派生して保持 (PII の暗号化に使用)
+                try {
+                    const dataKey = await deriveDataKey(password, saltResp.salt);
+                    await setSessionDataKey(dataKey);
+                } catch (e) { console.warn('data key derivation failed', e); }
+                return { ok: true };
+            } catch (e) {
+                console.error('password verify error', e);
+                return { ok: false, reason: '認証エラーが発生しました' };
+            }
         };
 
-        // 現在のアクセス情報（URLから解析）
-        const currentAccess = parseAccessFromUrl();
+        // 新規パスワード設定: クライアント側で salt + authKey を生成して GAS に送る
+        // 平文パスワードは GAS に送らない
+        const buildPasswordPayload = async (password) => {
+            if (!password) return { passwordSalt: '', passwordAuthKey: '', passwordAlgo: '', passwordIter: 0 };
+            const salt = newPasswordSalt();
+            const authKey = await derivePasswordAuthKey(password, salt);
+            return {
+                passwordSalt: salt,
+                passwordAuthKey: authKey,
+                passwordAlgo: 'PBKDF2-SHA256',
+                passwordIter: PBKDF2_ITER,
+            };
+        };
+
+        // 現在のアクセス情報（URLから解析・楽観的）
+        // - 正常: { name, role, storeIds, ... , signatureVerified: false }
+        // - 異常: null + currentAccessProblem に理由格納
+        let currentAccessProblem = null;
+        let currentAccess = (() => {
+            const parsed = parseAccessFromUrl();
+            if (!parsed) return null;
+            if (parsed.invalid) {
+                currentAccessProblem = parsed.reason; // 'legacy' | 'expired' | 'malformed'
+                clearSessionDataKey();
+                return null;
+            }
+            return parsed;
+        })();
 
         // 権限チェック: レポートの店舗名が許可されたstoreIdsに含まれるか判定
         // storeIds は Square の店舗ID（例: "LID..."）、r.store は店舗名（例: "本厚木店"）
@@ -2574,13 +2943,10 @@
                                 setCustomerTickets(data.tickets);
                             }
                             if (data && (data.plans || data.tickets)) {
-                                // ローカルにも反映
-                                try {
-                                    localStorage.setItem(TICKET_STORAGE_KEY, JSON.stringify({
-                                        plans: data.plans || [],
-                                        tickets: data.tickets || []
-                                    }));
-                                } catch (e) {}
+                                secureStore.set(TICKET_STORAGE_KEY, {
+                                    plans: data.plans || [],
+                                    tickets: data.tickets || []
+                                });
                                 setLastSynced(new Date());
                             }
                         })
@@ -2589,19 +2955,18 @@
                 return Promise.resolve();
             }, []);
 
-            // ローカルストレージから読み込み + GAS初回読み込み
+            // ローカルストレージから読み込み（暗号化キャッシュ復号） + GAS初回読み込み
             useEffect(() => {
-                try {
-                    const stored = JSON.parse(localStorage.getItem(TICKET_STORAGE_KEY) || '{}');
+                (async () => {
+                    const stored = await secureStore.get(TICKET_STORAGE_KEY, {});
                     setTicketPlans(stored.plans || [
                         { id: 'plan_1', name: '5回券', sessions: 5, price: 45000, validityDays: 90, active: true },
                         { id: 'plan_2', name: '10回券', sessions: 10, price: 80000, validityDays: 180, active: true },
                         { id: 'plan_3', name: '20回券', sessions: 20, price: 140000, validityDays: 365, active: true },
                     ]);
                     setCustomerTickets(stored.tickets || []);
-                } catch (e) { }
-
-                fetchTicketsFromGAS();
+                    fetchTicketsFromGAS();
+                })();
             }, [fetchTicketsFromGAS]);
 
             // 定期同期（60秒ごとにGASからデータ取得）
@@ -2613,11 +2978,9 @@
                 return () => clearInterval(interval);
             }, [fetchTicketsFromGAS]);
 
-            // ローカル保存
+            // ローカル保存（PII を含むため AES-GCM で暗号化）
             const saveLocal = useCallback((plans, tickets) => {
-                try {
-                    localStorage.setItem(TICKET_STORAGE_KEY, JSON.stringify({ plans, tickets }));
-                } catch (e) {}
+                secureStore.set(TICKET_STORAGE_KEY, { plans, tickets });
             }, []);
 
             // 回数券プラン管理
@@ -2803,7 +3166,8 @@
                         .then(data => {
                             if (data && data.members) {
                                 setManualMembers(data.members);
-                                try { localStorage.setItem(MANUAL_MEMBERS_STORAGE_KEY, JSON.stringify(data.members)); } catch(e) {}
+                                // PII を含むので AES-GCM で暗号化保存
+                                secureStore.set(MANUAL_MEMBERS_STORAGE_KEY, data.members);
                                 setLastSynced(new Date());
                             }
                         })
@@ -2812,13 +3176,13 @@
                 return Promise.resolve();
             }, []);
 
-            // 初回ロード
+            // 初回ロード（暗号化キャッシュから復号、レガシー平文があれば再暗号化）
             useEffect(() => {
-                try {
-                    const stored = JSON.parse(localStorage.getItem(MANUAL_MEMBERS_STORAGE_KEY) || '[]');
-                    setManualMembers(stored);
-                } catch (e) {}
-                fetchFromGAS();
+                (async () => {
+                    const stored = await secureStore.get(MANUAL_MEMBERS_STORAGE_KEY, []);
+                    if (Array.isArray(stored) && stored.length > 0) setManualMembers(stored);
+                    fetchFromGAS();
+                })();
             }, [fetchFromGAS]);
 
             // 定期同期（60秒ごと）
@@ -2829,7 +3193,7 @@
             }, [fetchFromGAS]);
 
             const saveLocal = useCallback((members) => {
-                try { localStorage.setItem(MANUAL_MEMBERS_STORAGE_KEY, JSON.stringify(members)); } catch (e) {}
+                secureStore.set(MANUAL_MEMBERS_STORAGE_KEY, members);
             }, []);
 
             // GASに保存
@@ -3042,15 +3406,13 @@
                         setDailyCloses(data.dailyCloses || []);
                         setAuditLogs(data.logs || []);
                         setLastSynced(new Date());
-                        try { localStorage.setItem(CASHBOOK_CACHE_KEY, JSON.stringify({ entries: data.entries, dailyCloses: data.dailyCloses || [], ts: Date.now() })); } catch(e) {}
+                        secureStore.set(CASHBOOK_CACHE_KEY, { entries: data.entries, dailyCloses: data.dailyCloses || [], ts: Date.now() });
                     }
                 } catch (e) {
                     setSyncError('スプレッドシートとの同期に失敗しました');
-                    // オフライン時はキャッシュから
-                    try {
-                        const cached = JSON.parse(localStorage.getItem(CASHBOOK_CACHE_KEY) || '{}');
-                        if (cached.entries) { setEntries(cached.entries); setDailyCloses(cached.dailyCloses || []); }
-                    } catch(e2) {}
+                    // オフライン時は暗号化キャッシュから
+                    const cached = await secureStore.get(CASHBOOK_CACHE_KEY, {});
+                    if (cached && cached.entries) { setEntries(cached.entries); setDailyCloses(cached.dailyCloses || []); }
                 } finally {
                     setLoading(false);
                 }
@@ -3058,13 +3420,13 @@
 
             // 初回ロード
             useEffect(() => {
-                // まずキャッシュから即時表示
-                try {
-                    const cached = JSON.parse(localStorage.getItem(CASHBOOK_CACHE_KEY) || '{}');
-                    if (cached.entries) { setEntries(cached.entries); setDailyCloses(cached.dailyCloses || []); }
-                } catch(e) {}
-                // スプレッドシートから最新取得
-                fetchFromGAS(true);
+                (async () => {
+                    // まず暗号化キャッシュから即時表示
+                    const cached = await secureStore.get(CASHBOOK_CACHE_KEY, {});
+                    if (cached && cached.entries) { setEntries(cached.entries); setDailyCloses(cached.dailyCloses || []); }
+                    // スプレッドシートから最新取得
+                    fetchFromGAS(true);
+                })();
             }, []);
 
             // 定期同期（60秒ごと）
@@ -3126,12 +3488,12 @@
                             return null;
                         }
                     }
-                    // キャッシュ更新
+                    // キャッシュ更新（暗号化）
                     try {
-                        const cached = JSON.parse(localStorage.getItem(CASHBOOK_CACHE_KEY) || '{}');
+                        const cached = await secureStore.get(CASHBOOK_CACHE_KEY, {});
                         cached.entries = [newEntry, ...(cached.entries || [])];
                         cached.ts = Date.now();
-                        localStorage.setItem(CASHBOOK_CACHE_KEY, JSON.stringify(cached));
+                        await secureStore.set(CASHBOOK_CACHE_KEY, cached);
                     } catch(e) {}
                     return newEntry;
                 } catch (e) {
@@ -7038,28 +7400,56 @@
 
             const handleSave = async () => {
                 if (!formData.name.trim()) return;
+                // パスワードが入力されていれば PBKDF2 でハッシュ化。空欄ならパスワードなし扱い。
+                // 編集モードでパスワード欄が空のときは「変更しない」意図とみなす。
+                let pwPayload = null;
+                if (editingStaff) {
+                    if (formData.password) {
+                        pwPayload = await buildPasswordPayload(formData.password);
+                    }
+                } else {
+                    pwPayload = await buildPasswordPayload(formData.password);
+                }
                 let updated;
                 if (editingStaff) {
-                    // 編集: 個別更新
-                    const changes = { name: formData.name, role: formData.role, password: formData.password, storeIds: formData.storeIds };
-                    updated = staffList.map(s => s.id === editingStaff.id ? { ...s, ...changes } : s);
+                    const changes = {
+                        name: formData.name,
+                        role: formData.role,
+                        storeIds: formData.storeIds,
+                    };
+                    if (pwPayload) {
+                        Object.assign(changes, pwPayload);
+                    }
+                    updated = staffList.map(s => s.id === editingStaff.id ? {
+                        ...s,
+                        ...changes,
+                        // ローカルキャッシュには平文を残さない
+                        password: undefined,
+                    } : s);
                     setStaffList(updated);
                     saveStaffListLocal(updated);
                     setGasSyncing(true);
                     await updateStaffGas(editingStaff.id, changes);
                     setGasSyncing(false);
-                    // 名前・店舗・役割が変わった場合、URLも変わるので注意喚起
                     const nameChanged = editingStaff.name !== formData.name;
                     const storeChanged = JSON.stringify(editingStaff.storeIds || []) !== JSON.stringify(formData.storeIds);
                     const roleChanged = editingStaff.role !== formData.role;
-                    if (nameChanged || storeChanged || roleChanged) {
+                    if (nameChanged || storeChanged || roleChanged || pwPayload) {
                         showToast(`「${formData.name}」を更新しました。URLが変更されたため、再度コピーしてください`, 'info', 5000);
                     } else {
                         showToast(`「${formData.name}」を更新しました`, 'success', 2000);
                     }
                 } else {
-                    // 新規追加
-                    const newStaff = { ...formData, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), createdAt: new Date().toISOString().slice(0, 10), status: 'active' };
+                    // 新規追加: 平文パスワードは保持しない
+                    const newStaff = {
+                        name: formData.name,
+                        role: formData.role,
+                        storeIds: formData.storeIds,
+                        ...(pwPayload || {}),
+                        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                        createdAt: new Date().toISOString().slice(0, 10),
+                        status: 'active',
+                    };
                     updated = [...staffList, newStaff];
                     setStaffList(updated);
                     saveStaffListLocal(updated);
@@ -7101,17 +7491,28 @@
             };
 
             const handleEdit = (staff) => {
-                setFormData({ name: staff.name, role: staff.role, password: staff.password || '', storeIds: staff.storeIds || [] });
+                // パスワードは平文で保持しないため空欄で開く（変更時のみ再入力）
+                setFormData({ name: staff.name, role: staff.role, password: '', storeIds: staff.storeIds || [] });
                 setEditingStaff(staff);
                 setIsAdding(true);
             };
 
-            const handleCopyUrl = (staff) => {
-                const url = generateStaffUrl(staff);
-                navigator.clipboard.writeText(url).then(() => {
+            const handleCopyUrl = async (staff) => {
+                setCopiedId('loading_' + staff.id);
+                const url = await generateStaffUrl(staff);
+                if (!url) {
+                    setCopiedId(null);
+                    showToast('URL発行に失敗しました。GAS設定を確認してください', 'error', 4000);
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(url);
                     setCopiedId(staff.id);
                     setTimeout(() => setCopiedId(null), 2000);
-                });
+                } catch (e) {
+                    setCopiedId(null);
+                    showToast('クリップボードへのコピーに失敗しました', 'error', 3000);
+                }
             };
 
             const toggleStoreId = (storeId) => {
@@ -7137,9 +7538,10 @@
                                         {staff.role === 'headquarter' ? '本部' : staff.role === 'manager' ? '店舗責任者' : 'スタッフ'}
                                     </span>
                                     {inactive && <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500 font-medium">無効</span>}
-                                    {!inactive && staff.password && (
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
-                                            <Icon name="lock" size={10} className="inline mr-0.5" />PW設定済
+                                    {!inactive && (staff.passwordAuthKey || staff.password) && (
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${staff.passwordAuthKey ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                            <Icon name={staff.passwordAuthKey ? 'lock' : 'alert-triangle'} size={10} className="inline mr-0.5" />
+                                            {staff.passwordAuthKey ? 'PW設定済' : 'PW再設定要'}
                                         </span>
                                     )}
                                     <span className="text-xs text-slate-400">
@@ -7264,15 +7666,21 @@
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         パスワード
-                                        <span className="text-xs text-slate-400 ml-1">（URL共有時に入力が必要）</span>
+                                        <span className="text-xs text-slate-400 ml-1">
+                                            {editingStaff ? '（空欄なら変更なし／入力すると上書き）' : '（URL共有時に入力が必要・空欄ならパスワードなし）'}
+                                        </span>
                                     </label>
                                     <input
-                                        type="text"
+                                        type="password"
+                                        autoComplete="new-password"
                                         value={formData.password}
                                         onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                                        placeholder="例: vivie2024（空欄ならパスワードなし）"
+                                        placeholder={editingStaff ? '変更する場合のみ入力' : '8文字以上を推奨'}
                                         className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none"
                                     />
+                                    <p className="text-[11px] text-slate-400 mt-1">
+                                        パスワードはこの画面上でハッシュ化（PBKDF2-SHA256）してから保存されます。元のパスワードは保存されません。
+                                    </p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -7387,6 +7795,196 @@
                             パスワードを設定するとURL共有時にパスワード入力が必要になります。
                         </p>
                     </div>
+                </Card>
+            );
+        };
+
+        // ========================================
+        // Supabase / LIFF 接続設定セクション
+        // ========================================
+
+        const SupabaseConfigSection = () => {
+            const initial = loadSupabaseConfig();
+            const [url, setUrl] = useState(initial.url);
+            const [anonKey, setAnonKey] = useState(initial.anonKey);
+            const [liffId, setLiffId] = useState(loadLiffId());
+            const [saved, setSaved] = useState(false);
+            const [diag, setDiag] = useState(null);
+            const [testing, setTesting] = useState(false);
+            const [showKey, setShowKey] = useState(false);
+            const [expanded, setExpanded] = useState(!initial.url);
+
+            const handleSave = () => {
+                saveSupabaseConfig({ url, anonKey });
+                saveLiffId(liffId);
+                // キャッシュをリセット
+                _supabaseClient = null;
+                _supabaseConfigCache = null;
+                _liffInitPromise = null;
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2500);
+                showToast('Supabase/LIFF 設定を保存しました', 'success', 2500);
+            };
+
+            const handleTest = async () => {
+                setTesting(true);
+                setDiag(null);
+                try {
+                    const result = await diagnoseSupabase();
+                    setDiag(result);
+                } finally {
+                    setTesting(false);
+                }
+            };
+
+            const badge = (ok, label) => (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                    <Icon name={ok ? 'check-circle' : 'x-circle'} size={12} />
+                    {label}
+                </span>
+            );
+
+            return (
+                <Card>
+                    <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+                        <div className="flex items-center">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mr-3">
+                                <Icon name="database" size={18} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-800">Supabase / LIFF 接続設定</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {initial.url ? '✓ 接続情報登録済み' : '未設定 (カウンセリング内製化以降で必要)'}
+                                </p>
+                            </div>
+                        </div>
+                        <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} className="text-slate-400" />
+                    </div>
+
+                    {expanded && (
+                        <div className="mt-4 space-y-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                                <p className="font-semibold text-slate-700 mb-1"><Icon name="info" size={12} className="inline mr-1" />初回セットアップ</p>
+                                <p>Supabase プロジェクトを作成して URL と anon key をここに入力してください。
+                                手順の詳細は <code className="bg-white px-1 rounded">SUPABASE_SETUP.md</code> を参照。</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Supabase Project URL</label>
+                                <input
+                                    type="url"
+                                    value={url}
+                                    onChange={e => setUrl(e.target.value)}
+                                    placeholder="https://xxxxx.supabase.co"
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">anon public key</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowKey(v => !v)}
+                                        className="text-xs text-vivie-600 hover:text-vivie-700"
+                                    >
+                                        {showKey ? '隠す' : '表示'}
+                                    </button>
+                                </div>
+                                <input
+                                    type={showKey ? 'text' : 'password'}
+                                    value={anonKey}
+                                    onChange={e => setAnonKey(e.target.value)}
+                                    placeholder="eyJhbGciOi..."
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    Supabase Dashboard → Settings → API → "anon public" の値を貼り付け。
+                                    <strong className="text-rose-600">service_role key は絶対にここに入れないこと</strong>
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    LINE LIFF ID
+                                    <span className="text-xs text-slate-400 ml-1">(カウンセリングフォーム用)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={liffId}
+                                    onChange={e => setLiffId(e.target.value)}
+                                    placeholder="1234567890-AbCdEfGh"
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    LINE Developers Console の LIFF タブで発行。未設定でも web/QR 経由では動作する
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleSave}
+                                    className="px-4 py-2 bg-vivie-500 hover:bg-vivie-600 text-white rounded-xl text-sm font-medium transition-colors"
+                                >
+                                    <Icon name="save" size={14} className="inline mr-1" />保存
+                                </button>
+                                <button
+                                    onClick={handleTest}
+                                    disabled={testing || !url || !anonKey}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {testing ? <><Icon name="loader-2" size={14} className="inline mr-1 animate-spin" />テスト中...</> : <><Icon name="plug" size={14} className="inline mr-1" />接続テスト</>}
+                                </button>
+                                {saved && <span className="text-sm text-green-600"><Icon name="check" size={14} className="inline mr-1" />保存しました</span>}
+                            </div>
+
+                            {diag && (
+                                <div className="border border-slate-200 rounded-xl p-3 space-y-2 bg-slate-50">
+                                    <p className="text-sm font-semibold text-slate-700">診断結果</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {badge(diag.sdkLoaded, 'SDK 読込')}
+                                        {badge(diag.url, 'URL 入力')}
+                                        {badge(diag.anonKey, 'anon key 入力')}
+                                        {badge(diag.canConnect, '接続可能')}
+                                    </div>
+                                    {diag.error && (
+                                        <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded">
+                                            <Icon name="alert-circle" size={12} className="inline mr-1" />{diag.error}
+                                        </p>
+                                    )}
+                                    {diag.tables && Object.keys(diag.tables).length > 0 && (
+                                        <div className="space-y-1 mt-2">
+                                            <p className="text-xs font-medium text-slate-600">テーブル確認</p>
+                                            {Object.entries(diag.tables).map(([name, info]) => (
+                                                <div key={name} className="text-xs flex items-center gap-2">
+                                                    {badge(info.ok, name)}
+                                                    {!info.ok && <span className="text-slate-500 truncate">{info.error}</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {diag.canConnect && (
+                                        <p className="text-xs text-emerald-700 bg-emerald-50 p-2 rounded">
+                                            <Icon name="check-circle" size={12} className="inline mr-1" />
+                                            Supabase に接続できています。次のPR (#2 店舗・スタッフ移行) に進めます。
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <details className="text-xs text-slate-600 bg-slate-50 rounded-xl p-3">
+                                <summary className="cursor-pointer font-medium">セットアップ手順 (クリックで展開)</summary>
+                                <ol className="mt-2 space-y-1 list-decimal list-inside">
+                                    <li>https://supabase.com/dashboard で新規プロジェクト作成 (Region: Tokyo)</li>
+                                    <li>Settings → API から <code>Project URL</code> と <code>anon public</code> を控える</li>
+                                    <li>SQL Editor で <code>supabase/migrations/001〜011</code> を順番に実行</li>
+                                    <li>さらに <code>supabase/seed/001_counseling_form_v1.sql</code> を実行</li>
+                                    <li>上のフォームに URL と anon key を貼り付けて保存</li>
+                                    <li>「接続テスト」ボタンで緑バッジが4つ点けば OK</li>
+                                </ol>
+                            </details>
+                        </div>
+                    )}
                 </Card>
             );
         };
@@ -13181,20 +13779,18 @@
 
         const SA_STORAGE_KEY = 'vivie_skin_analysis_history';
 
-        const saSaveResult = (result, imageDataUrl) => {
+        // 肌分析履歴は顔画像 (PII) を含むため AES-GCM で暗号化保存
+        const saSaveResult = async (result, imageDataUrl) => {
             try {
-                const history = JSON.parse(localStorage.getItem(SA_STORAGE_KEY) || '[]');
-                // 画像はサイズ削減のためサムネイルとして保存
+                const history = await secureStore.get(SA_STORAGE_KEY, []);
                 history.unshift({ result, imageDataUrl, savedAt: new Date().toISOString() });
-                // 最大10件保持
                 if (history.length > 10) history.length = 10;
-                localStorage.setItem(SA_STORAGE_KEY, JSON.stringify(history));
+                await secureStore.set(SA_STORAGE_KEY, history);
             } catch (e) { console.warn('肌分析データの保存に失敗:', e); }
         };
 
-        const saLoadHistory = () => {
-            try { return JSON.parse(localStorage.getItem(SA_STORAGE_KEY) || '[]'); }
-            catch { return []; }
+        const saLoadHistory = async () => {
+            return secureStore.get(SA_STORAGE_KEY, []);
         };
 
         // ==========================================
@@ -13347,14 +13943,19 @@
             const [showBeforeAfter, setShowBeforeAfter] = useState(false);
             const grade = saGetGrade(result.totalScore);
 
-            // localStorage に保存 & 前回結果を取得
-            const history = useMemo(() => saLoadHistory(), []);
-            const previousResult = history.length > 0 ? history[0] : null;
-
-            // 初回マウント時に結果を保存
+            // 暗号化されたキャッシュから履歴ロード（async）
+            const [history, setHistory] = useState([]);
             useEffect(() => {
-                saSaveResult(result, imageDataUrl);
+                let cancelled = false;
+                (async () => {
+                    const h = await saLoadHistory();
+                    if (!cancelled) setHistory(h);
+                    // 初回マウント時に今回結果を保存
+                    await saSaveResult(result, imageDataUrl);
+                })();
+                return () => { cancelled = true; };
             }, []);
+            const previousResult = history.length > 0 ? history[0] : null;
 
             const getAdvice = (score) => {
                 if (score >= 80) return '素晴らしい肌状態です。現在のケアを継続しましょう。';
@@ -13982,6 +14583,9 @@
                         </details>
                     </Card>
 
+                    {/* Supabase 接続設定 */}
+                    <SupabaseConfigSection />
+
                     {/* 店舗管理 */}
                     <StoreManagementSection />
 
@@ -14021,9 +14625,11 @@
                 setChecking(true);
                 setError('');
                 const result = await verifyStaffPassword(access.staffId, password);
+                // パスワードを変数からも即破棄
+                setPassword('');
                 setChecking(false);
                 if (result.ok) {
-                    sessionStorage.setItem('vivie_pw_verified', '1');
+                    sessionStorage.setItem(AUTH_VERIFIED_SESSION, '1');
                     onUnlock();
                 } else {
                     setError(result.reason || 'パスワードが正しくありません');
@@ -14069,11 +14675,90 @@
             );
         };
 
+        // 無効URL案内画面 (legacy / expired / malformed / signature不正)
+        const InvalidAccessScreen = ({ reason }) => {
+            const messages = {
+                legacy: { title: 'URLの再発行が必要です', body: 'セキュリティ強化に伴い、旧形式のアクセスURLは無効になりました。管理者から新しいログインURLを受け取ってください。' },
+                expired: { title: 'URLの有効期限が切れています', body: 'アクセスURLの有効期限が切れました。管理者から新しいURLを発行してもらってください。' },
+                malformed: { title: 'URLが破損しています', body: 'アクセスURLが正しくありません。管理者から再度URLを共有してもらってください。' },
+                signature: { title: 'URLが改ざんされている可能性があります', body: 'URLの署名検証に失敗しました。管理者にお問い合わせください。' },
+                network: { title: 'ネットワークエラー', body: 'GAS との通信に失敗しました。インターネット接続を確認してリロードしてください。' },
+            };
+            const msg = messages[reason] || messages.malformed;
+            return (
+                <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#fff5f5 0%,#fff0eb 50%,#fff8f0 100%)',padding:20}}>
+                    <div style={{width:'100%',maxWidth:440,background:'white',borderRadius:24,boxShadow:'0 20px 60px rgba(0,0,0,.08)',padding:40,textAlign:'center'}}>
+                        <div style={{width:64,height:64,background:'linear-gradient(135deg,#dc2626,#b91c1c)',borderRadius:20,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
+                            <Icon name="alert-triangle" size={28} className="text-white" />
+                        </div>
+                        <h2 style={{fontSize:20,fontWeight:700,color:'#1a1a1a',marginBottom:8}}>{msg.title}</h2>
+                        <p style={{fontSize:13,color:'#6b6b6b',marginBottom:24,lineHeight:1.6}}>{msg.body}</p>
+                        <button
+                            onClick={() => { window.location.href = window.location.origin + window.location.pathname; }}
+                            style={{padding:'10px 20px',background:'#475569',color:'white',border:'none',borderRadius:12,fontSize:14,fontWeight:600,cursor:'pointer'}}
+                        >
+                            トップに戻る
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 認証中スプラッシュ（GASでトークン署名検証する間の表示）
+        const AuthVerifyingScreen = () => (
+            <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#f0f7f3 0%,#e8f5ec 50%,#f5f0e8 100%)'}}>
+                <div style={{textAlign:'center'}}>
+                    <div style={{width:48,height:48,border:'4px solid #DCA9A8',borderTopColor:'transparent',borderRadius:'50%',margin:'0 auto 16px',animation:'spin 1s linear infinite'}}></div>
+                    <p style={{fontSize:14,color:'#6b6b6b'}}>認証中...</p>
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+            </div>
+        );
+
         // パスワードロック付きラッパー（HooksルールのためAppと分離）
         const AppWithAuth = () => {
+            // トークン署名検証の状態
+            // - currentAccess が null かつ currentAccessProblem が無い → ゲストアクセス（GAS verify不要）
+            // - currentAccess が null かつ currentAccessProblem あり → 無効URL画面
+            // - currentAccess あり → GAS で署名検証して結果待ち
+            const [tokenStatus, setTokenStatus] = useState(() => {
+                if (!currentAccess && !currentAccessProblem) return 'ok';
+                if (!currentAccess) return 'invalid';
+                return 'verifying';
+            });
+            const [tokenInvalidReason, setTokenInvalidReason] = useState(currentAccessProblem || 'malformed');
+
+            useEffect(() => {
+                if (tokenStatus !== 'verifying' || !currentAccess) return;
+                let cancelled = false;
+                (async () => {
+                    const res = await verifyTokenWithGas(currentAccess.raw);
+                    if (cancelled) return;
+                    if (res.ok) {
+                        currentAccess.signatureVerified = true;
+                        // GAS が再構築した payload で上書き（権限改ざん対策）
+                        if (res.payload) {
+                            currentAccess.name = res.payload.n || currentAccess.name;
+                            currentAccess.role = res.payload.r || currentAccess.role;
+                            currentAccess.storeIds = res.payload.sid || currentAccess.storeIds;
+                            currentAccess.hasPassword = !!res.payload.pw;
+                        }
+                        setTokenStatus('ok');
+                    } else {
+                        clearSessionDataKey();
+                        setTokenInvalidReason(res.reason || 'signature');
+                        setTokenStatus('invalid');
+                    }
+                })();
+                return () => { cancelled = true; };
+            }, [tokenStatus]);
+
             const [passwordVerified, setPasswordVerified] = useState(
-                !currentAccess || !currentAccess.hasPassword || sessionStorage.getItem('vivie_pw_verified') === '1'
+                !currentAccess || !currentAccess.hasPassword || sessionStorage.getItem(AUTH_VERIFIED_SESSION) === '1'
             );
+
+            if (tokenStatus === 'verifying') return <AuthVerifyingScreen />;
+            if (tokenStatus === 'invalid') return <InvalidAccessScreen reason={tokenInvalidReason} />;
 
             // パスワードロック画面を表示（Appの前に判定し、Hooks順序を壊さない）
             if (currentAccess && currentAccess.hasPassword && !passwordVerified) {
