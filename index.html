@@ -40,6 +40,12 @@
     <!-- html2canvas (for Treatment Report screenshot) -->
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
+    <!-- Supabase JS SDK (Phase 2: データ層移行) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- LINE LIFF SDK (カウンセリングフォームの LINE 連携) -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
     <!-- Custom Config for Tailwind (vivie Theme - Enhanced) -->
     <script>
         tailwind.config = {
@@ -1221,6 +1227,100 @@
         };
         // ページロード時にconfig取得を先行開始
         fetchSquareConfig();
+
+        // ========================================
+        // Supabase クライアント
+        // ========================================
+        // URL と anon key は localStorage 経由で設定する (設定画面から入力)
+        // service_role key は絶対にクライアントに出さない (Vercel サーバサイド限定)
+
+        const SUPABASE_CONFIG_KEY = 'vivie_supabase_config';
+        const LIFF_CONFIG_KEY = 'vivie_liff_id';
+
+        const loadSupabaseConfig = () => {
+            try {
+                const raw = localStorage.getItem(SUPABASE_CONFIG_KEY);
+                if (!raw) return { url: '', anonKey: '' };
+                const parsed = JSON.parse(raw);
+                return { url: parsed.url || '', anonKey: parsed.anonKey || '' };
+            } catch (e) { return { url: '', anonKey: '' }; }
+        };
+
+        const saveSupabaseConfig = (cfg) => {
+            localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({
+                url: (cfg.url || '').trim().replace(/\/$/, ''),
+                anonKey: (cfg.anonKey || '').trim()
+            }));
+        };
+
+        const loadLiffId = () => localStorage.getItem(LIFF_CONFIG_KEY) || '';
+        const saveLiffId = (id) => {
+            const v = (id || '').trim();
+            if (v) localStorage.setItem(LIFF_CONFIG_KEY, v);
+            else localStorage.removeItem(LIFF_CONFIG_KEY);
+        };
+
+        // 遅延初期化する Supabase クライアント (設定未入力でもアプリは動く)
+        let _supabaseClient = null;
+        let _supabaseConfigCache = null;
+        const getSupabase = () => {
+            if (!window.supabase) return null;
+            const cfg = loadSupabaseConfig();
+            if (!cfg.url || !cfg.anonKey) return null;
+            const cacheKey = cfg.url + '|' + cfg.anonKey;
+            if (_supabaseClient && _supabaseConfigCache === cacheKey) return _supabaseClient;
+            try {
+                _supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
+                    auth: { persistSession: false },
+                    realtime: { params: { eventsPerSecond: 5 } }
+                });
+                _supabaseConfigCache = cacheKey;
+                return _supabaseClient;
+            } catch (e) {
+                console.error('[Supabase] createClient failed:', e);
+                return null;
+            }
+        };
+
+        const isSupabaseReady = () => {
+            const cfg = loadSupabaseConfig();
+            return !!(window.supabase && cfg.url && cfg.anonKey);
+        };
+
+        // 接続診断: public テーブル (stores) に select 一発打つ
+        const diagnoseSupabase = async () => {
+            const cfg = loadSupabaseConfig();
+            const out = { url: !!cfg.url, anonKey: !!cfg.anonKey, sdkLoaded: !!window.supabase, canConnect: false, tables: {}, error: null };
+            if (!cfg.url || !cfg.anonKey) { out.error = 'URL または anon key が未入力です'; return out; }
+            if (!window.supabase) { out.error = 'Supabase SDK が読み込まれていません'; return out; }
+            const client = getSupabase();
+            if (!client) { out.error = 'クライアント初期化に失敗'; return out; }
+            try {
+                // 1. stores (anon で active=true を読める想定)
+                const { data: stores, error: err1 } = await client.from('stores').select('id, name, active').limit(5);
+                out.tables.stores = err1 ? { ok: false, error: err1.message } : { ok: true, count: (stores || []).length };
+                // 2. counseling_form_definitions (active=true を読める想定)
+                const { data: forms, error: err2 } = await client.from('counseling_form_definitions').select('version, title, active').eq('active', true).limit(1);
+                out.tables.counseling_form_definitions = err2 ? { ok: false, error: err2.message } : { ok: true, version: forms && forms[0] ? forms[0].version : null };
+                out.canConnect = out.tables.stores.ok || out.tables.counseling_form_definitions.ok;
+            } catch (e) {
+                out.error = e.message || String(e);
+            }
+            return out;
+        };
+
+        // LIFF 初期化 (呼び出し時に遅延ロード)
+        let _liffInitPromise = null;
+        const initLiff = () => {
+            const liffId = loadLiffId();
+            if (!liffId) return Promise.resolve({ ok: false, reason: 'LIFF ID 未設定' });
+            if (!window.liff) return Promise.resolve({ ok: false, reason: 'LIFF SDK 未ロード' });
+            if (_liffInitPromise) return _liffInitPromise;
+            _liffInitPromise = window.liff.init({ liffId })
+                .then(() => ({ ok: true, inClient: window.liff.isInClient(), loggedIn: window.liff.isLoggedIn() }))
+                .catch(err => ({ ok: false, reason: err && err.message ? err.message : 'init failed' }));
+            return _liffInitPromise;
+        };
 
         // ========================================
         // セキュリティヘルパー (Web Crypto)
@@ -7695,6 +7795,196 @@
                             パスワードを設定するとURL共有時にパスワード入力が必要になります。
                         </p>
                     </div>
+                </Card>
+            );
+        };
+
+        // ========================================
+        // Supabase / LIFF 接続設定セクション
+        // ========================================
+
+        const SupabaseConfigSection = () => {
+            const initial = loadSupabaseConfig();
+            const [url, setUrl] = useState(initial.url);
+            const [anonKey, setAnonKey] = useState(initial.anonKey);
+            const [liffId, setLiffId] = useState(loadLiffId());
+            const [saved, setSaved] = useState(false);
+            const [diag, setDiag] = useState(null);
+            const [testing, setTesting] = useState(false);
+            const [showKey, setShowKey] = useState(false);
+            const [expanded, setExpanded] = useState(!initial.url);
+
+            const handleSave = () => {
+                saveSupabaseConfig({ url, anonKey });
+                saveLiffId(liffId);
+                // キャッシュをリセット
+                _supabaseClient = null;
+                _supabaseConfigCache = null;
+                _liffInitPromise = null;
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2500);
+                showToast('Supabase/LIFF 設定を保存しました', 'success', 2500);
+            };
+
+            const handleTest = async () => {
+                setTesting(true);
+                setDiag(null);
+                try {
+                    const result = await diagnoseSupabase();
+                    setDiag(result);
+                } finally {
+                    setTesting(false);
+                }
+            };
+
+            const badge = (ok, label) => (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                    <Icon name={ok ? 'check-circle' : 'x-circle'} size={12} />
+                    {label}
+                </span>
+            );
+
+            return (
+                <Card>
+                    <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+                        <div className="flex items-center">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mr-3">
+                                <Icon name="database" size={18} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-800">Supabase / LIFF 接続設定</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {initial.url ? '✓ 接続情報登録済み' : '未設定 (カウンセリング内製化以降で必要)'}
+                                </p>
+                            </div>
+                        </div>
+                        <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} className="text-slate-400" />
+                    </div>
+
+                    {expanded && (
+                        <div className="mt-4 space-y-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                                <p className="font-semibold text-slate-700 mb-1"><Icon name="info" size={12} className="inline mr-1" />初回セットアップ</p>
+                                <p>Supabase プロジェクトを作成して URL と anon key をここに入力してください。
+                                手順の詳細は <code className="bg-white px-1 rounded">SUPABASE_SETUP.md</code> を参照。</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Supabase Project URL</label>
+                                <input
+                                    type="url"
+                                    value={url}
+                                    onChange={e => setUrl(e.target.value)}
+                                    placeholder="https://xxxxx.supabase.co"
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">anon public key</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowKey(v => !v)}
+                                        className="text-xs text-vivie-600 hover:text-vivie-700"
+                                    >
+                                        {showKey ? '隠す' : '表示'}
+                                    </button>
+                                </div>
+                                <input
+                                    type={showKey ? 'text' : 'password'}
+                                    value={anonKey}
+                                    onChange={e => setAnonKey(e.target.value)}
+                                    placeholder="eyJhbGciOi..."
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    Supabase Dashboard → Settings → API → "anon public" の値を貼り付け。
+                                    <strong className="text-rose-600">service_role key は絶対にここに入れないこと</strong>
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    LINE LIFF ID
+                                    <span className="text-xs text-slate-400 ml-1">(カウンセリングフォーム用)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={liffId}
+                                    onChange={e => setLiffId(e.target.value)}
+                                    placeholder="1234567890-AbCdEfGh"
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:border-vivie-400 focus:ring-1 focus:ring-vivie-400/30 outline-none font-mono"
+                                />
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    LINE Developers Console の LIFF タブで発行。未設定でも web/QR 経由では動作する
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleSave}
+                                    className="px-4 py-2 bg-vivie-500 hover:bg-vivie-600 text-white rounded-xl text-sm font-medium transition-colors"
+                                >
+                                    <Icon name="save" size={14} className="inline mr-1" />保存
+                                </button>
+                                <button
+                                    onClick={handleTest}
+                                    disabled={testing || !url || !anonKey}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {testing ? <><Icon name="loader-2" size={14} className="inline mr-1 animate-spin" />テスト中...</> : <><Icon name="plug" size={14} className="inline mr-1" />接続テスト</>}
+                                </button>
+                                {saved && <span className="text-sm text-green-600"><Icon name="check" size={14} className="inline mr-1" />保存しました</span>}
+                            </div>
+
+                            {diag && (
+                                <div className="border border-slate-200 rounded-xl p-3 space-y-2 bg-slate-50">
+                                    <p className="text-sm font-semibold text-slate-700">診断結果</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {badge(diag.sdkLoaded, 'SDK 読込')}
+                                        {badge(diag.url, 'URL 入力')}
+                                        {badge(diag.anonKey, 'anon key 入力')}
+                                        {badge(diag.canConnect, '接続可能')}
+                                    </div>
+                                    {diag.error && (
+                                        <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded">
+                                            <Icon name="alert-circle" size={12} className="inline mr-1" />{diag.error}
+                                        </p>
+                                    )}
+                                    {diag.tables && Object.keys(diag.tables).length > 0 && (
+                                        <div className="space-y-1 mt-2">
+                                            <p className="text-xs font-medium text-slate-600">テーブル確認</p>
+                                            {Object.entries(diag.tables).map(([name, info]) => (
+                                                <div key={name} className="text-xs flex items-center gap-2">
+                                                    {badge(info.ok, name)}
+                                                    {!info.ok && <span className="text-slate-500 truncate">{info.error}</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {diag.canConnect && (
+                                        <p className="text-xs text-emerald-700 bg-emerald-50 p-2 rounded">
+                                            <Icon name="check-circle" size={12} className="inline mr-1" />
+                                            Supabase に接続できています。次のPR (#2 店舗・スタッフ移行) に進めます。
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <details className="text-xs text-slate-600 bg-slate-50 rounded-xl p-3">
+                                <summary className="cursor-pointer font-medium">セットアップ手順 (クリックで展開)</summary>
+                                <ol className="mt-2 space-y-1 list-decimal list-inside">
+                                    <li>https://supabase.com/dashboard で新規プロジェクト作成 (Region: Tokyo)</li>
+                                    <li>Settings → API から <code>Project URL</code> と <code>anon public</code> を控える</li>
+                                    <li>SQL Editor で <code>supabase/migrations/001〜011</code> を順番に実行</li>
+                                    <li>さらに <code>supabase/seed/001_counseling_form_v1.sql</code> を実行</li>
+                                    <li>上のフォームに URL と anon key を貼り付けて保存</li>
+                                    <li>「接続テスト」ボタンで緑バッジが4つ点けば OK</li>
+                                </ol>
+                            </details>
+                        </div>
+                    )}
                 </Card>
             );
         };
@@ -14292,6 +14582,9 @@
                             </div>
                         </details>
                     </Card>
+
+                    {/* Supabase 接続設定 */}
+                    <SupabaseConfigSection />
 
                     {/* 店舗管理 */}
                     <StoreManagementSection />
