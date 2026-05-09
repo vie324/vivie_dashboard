@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TreatmentDetailView } from '@/components/treatments/treatment-detail-view';
+import { LineFollowupPanel } from '@/components/treatments/line-followup-panel';
 import { ChevronLeft } from 'lucide-react';
 import { formatDate, formatYen } from '@/lib/utils';
 
@@ -19,7 +20,9 @@ export default async function TreatmentDetailPage({
   const supabase = createClient();
   const { data: report } = await supabase
     .from('treatment_reports')
-    .select('*, member:members(id, full_name, furigana), staff:staff(display_name), store:stores(name)')
+    .select(
+      '*, member:members(id, full_name, furigana, line_user_id, line_display_name), staff:staff(display_name), store:stores(name)',
+    )
     .eq('id', params.id)
     .maybeSingle();
   if (!report) notFound();
@@ -85,6 +88,19 @@ export default async function TreatmentDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <LineFollowupPanel
+        reportId={r.id}
+        isFirstVisit={r.is_first_visit}
+        contracted={r.contracted}
+        followupOffer={r.followup_offer}
+        lineSentAt={r.line_sent_at}
+        lineSendError={r.line_send_error}
+        memberName={r.member?.full_name ?? ''}
+        memberId={r.member?.id ?? ''}
+        memberLineUserId={r.member?.line_user_id ?? null}
+        memberLineDisplayName={r.member?.line_display_name ?? null}
+      />
 
       <TreatmentDetailView
         report={r}

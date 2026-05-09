@@ -53,6 +53,12 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
 
   const selectedMember = members.find((m) => m.id === memberId);
 
+  const defaultExpiresAt = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const [form, setForm] = useState({
     store_id: defaultStoreId ?? stores[0]?.id ?? '',
     treatment_date: todayISO(),
@@ -63,6 +69,16 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
     next_recommendation: '',
     before_photo_path: null as string | null,
     after_photo_path: null as string | null,
+    is_first_visit: true,
+    contracted: false,
+    // フォローアップオファー (初回未契約のみ)
+    offer_menu: '',
+    offer_original_price: 0,
+    offer_discounted_price: 0,
+    offer_discount_label: '',
+    offer_expires_at: defaultExpiresAt,
+    offer_reservation_url: '',
+    offer_notes: '',
   });
   const [skin, setSkin] = useState<ScoreMap>(emptyScores(SKIN_AXES));
   const [face, setFace] = useState<ScoreMap>(emptyScores(FACE_AXES));
@@ -77,6 +93,21 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
     setSubmitting(true);
     try {
       const supabase = createClient();
+
+      // フォローアップオファー: 初回未契約 かつ オファー入力ありの場合のみ保存
+      const wantsOffer = form.is_first_visit && !form.contracted;
+      const followupOffer = wantsOffer
+        ? {
+            menu: form.offer_menu || null,
+            original_price: form.offer_original_price || null,
+            discounted_price: form.offer_discounted_price || null,
+            discount_label: form.offer_discount_label || null,
+            expires_at: form.offer_expires_at || null,
+            reservation_url: form.offer_reservation_url || null,
+            notes: form.offer_notes || null,
+          }
+        : null;
+
       const { data, error } = await supabase
         .from('treatment_reports')
         .insert({
@@ -94,6 +125,9 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
           after_photo_path: form.after_photo_path,
           observations: form.observations || null,
           next_recommendation: form.next_recommendation || null,
+          is_first_visit: form.is_first_visit,
+          contracted: form.contracted,
+          followup_offer: followupOffer,
         })
         .select('id')
         .single();
@@ -165,6 +199,109 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
           )}
         </CardContent>
       </Card>
+
+      {/* 来店区分 / 契約 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>来店区分</CardTitle>
+          <p className="text-xs text-ink-500 mt-1">
+            初回来店で契約に至らなかった場合、本日の成果をフォローアップ LINE で送信できます
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ToggleCard
+              checked={form.is_first_visit}
+              onChange={(v) => setForm((f) => ({ ...f, is_first_visit: v }))}
+              title="初回来店"
+              hint="新規のお客様"
+            />
+            <ToggleCard
+              checked={form.contracted}
+              onChange={(v) => setForm((f) => ({ ...f, contracted: v }))}
+              title="契約成立"
+              hint="サブスク契約あり"
+              tone="green"
+            />
+          </div>
+          {form.is_first_visit && !form.contracted && (
+            <div className="rounded-xl bg-vivie-50/60 border border-vivie-200 px-4 py-3 text-sm text-vivie-700">
+              💌 初回未契約のため、フォローアップ LINE 送信の対象です。下記にオファー内容を入力してください。
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* フォローアップオファー (初回未契約のみ) */}
+      {form.is_first_visit && !form.contracted && (
+        <Card>
+          <CardHeader>
+            <CardTitle>フォローアップオファー</CardTitle>
+            <p className="text-xs text-ink-500 mt-1">
+              「あともう 1 回だけお得に来店できる」内容を設定します。LINE 送信時にこの情報を Flex Message に展開します。
+            </p>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="特別メニュー">
+              <Input
+                value={form.offer_menu}
+                onChange={(e) => setForm((f) => ({ ...f, offer_menu: e.target.value }))}
+                placeholder="例: ハイドラフェイシャル"
+              />
+            </Field>
+            <Field label="期限">
+              <Input
+                type="date"
+                value={form.offer_expires_at}
+                onChange={(e) => setForm((f) => ({ ...f, offer_expires_at: e.target.value }))}
+              />
+            </Field>
+            <Field label="通常価格 (円)">
+              <Input
+                type="number"
+                value={form.offer_original_price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, offer_original_price: Number(e.target.value) || 0 }))
+                }
+              />
+            </Field>
+            <Field label="特別価格 (円)">
+              <Input
+                type="number"
+                value={form.offer_discounted_price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, offer_discounted_price: Number(e.target.value) || 0 }))
+                }
+              />
+            </Field>
+            <Field label="割引ラベル" hint="例: 約60% OFF / 1回限定">
+              <Input
+                value={form.offer_discount_label}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, offer_discount_label: e.target.value }))
+                }
+              />
+            </Field>
+            <Field label="予約 URL" hint="ボタンの遷移先">
+              <Input
+                type="url"
+                value={form.offer_reservation_url}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, offer_reservation_url: e.target.value }))
+                }
+                placeholder="https://..."
+              />
+            </Field>
+            <Field label="補足" className="sm:col-span-2">
+              <Input
+                value={form.offer_notes}
+                onChange={(e) => setForm((f) => ({ ...f, offer_notes: e.target.value }))}
+                placeholder="例: お一人様 1 回限り。ご予約時にこのメッセージを提示してください。"
+              />
+            </Field>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 施術内容 */}
       <Card>
@@ -311,5 +448,49 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
         </CardFooter>
       </Card>
     </form>
+  );
+}
+
+function ToggleCard({
+  checked,
+  onChange,
+  title,
+  hint,
+  tone = 'rose',
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  hint: string;
+  tone?: 'rose' | 'green';
+}) {
+  const activeClass =
+    tone === 'green'
+      ? 'border-emerald-300 bg-emerald-50/60 text-emerald-700'
+      : 'border-vivie-300 bg-vivie-50/60 text-vivie-700';
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+        checked ? activeClass : 'border-ink-200 bg-white hover:bg-ink-50'
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 shrink-0 ${
+          checked ? (tone === 'green' ? 'bg-emerald-500 border-emerald-500' : 'bg-vivie-400 border-vivie-400') : 'bg-white border-ink-300'
+        }`}
+      >
+        {checked && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </span>
+      <div>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs opacity-70">{hint}</p>
+      </div>
+    </button>
   );
 }

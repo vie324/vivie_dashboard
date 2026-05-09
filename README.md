@@ -110,6 +110,23 @@ supabase db push
    - イベント: `customer.*`, `subscription.*`, `payment.*`
    - Signature key を `SQUARE_WEBHOOK_SIGNATURE_KEY` に設定
 
+### 3b. LINE Messaging API (公式 LINE 連携)
+
+施術レポートから「初回未契約フォローアップ」LINE を送るために設定します。
+
+1. <https://developers.line.biz/console/> で **Messaging API チャンネル** を作成
+2. **Basic settings** から `Channel secret` を取得 → `LINE_CHANNEL_SECRET`
+3. **Messaging API** から `Channel access token` を発行 → `LINE_CHANNEL_ACCESS_TOKEN`
+4. 同画面で **Webhook URL** を設定: `https://<your-domain>/api/line/webhook`
+5. **Use webhook** を ON、**Verify** をクリックして 200 が返ることを確認
+6. **Auto-reply messages** / **Greeting messages** は好みで OFF (任意)
+
+設定後の動作:
+- お客様が公式 LINE を **友だち追加** すると `follow` イベントが届き、`line_events` に
+  記録される (display name + picture 付き)
+- 会員詳細ページの「公式 LINE 連携」セクションから手動で会員と紐付け
+- 施術レポートで `初回来店 + 未契約` のお客様には「LINE で送信」ボタンが表示
+
 ### 4. 環境変数
 
 `.env.example` を `.env.local` にコピーして値を埋める。

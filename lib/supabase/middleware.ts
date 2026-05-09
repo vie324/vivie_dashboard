@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   '/staff/',
   '/api/staff/',
   '/api/square/webhook',
+  '/api/line/webhook',
   '/_next',
   '/favicon.ico',
 ];
