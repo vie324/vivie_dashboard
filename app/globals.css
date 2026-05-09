@@ -13,7 +13,7 @@
   --ring: 201 135 133;
 }
 
-.dark {
+html.dark {
   --background: 26 22 19;
   --foreground: 245 229 228;
   --primary: 201 135 133;
@@ -23,6 +23,23 @@
   --border: 63 58 51;
   --ring: 220 169 168;
 }
+
+html.dark body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+}
+
+html.dark .bg-white { background-color: #2A2521 !important; }
+html.dark .border-ink-100 { border-color: #3F3A33 !important; }
+html.dark .border-ink-200 { border-color: #4F4A43 !important; }
+html.dark .text-ink-900 { color: #F5E5E4 !important; }
+html.dark .text-ink-700 { color: #D9D5CE !important; }
+html.dark .text-ink-500 { color: #B6AFA4 !important; }
+html.dark .text-ink-400 { color: #9F988E !important; }
+html.dark .bg-ink-50 { background-color: #2F2823 !important; }
+html.dark .bg-ink-50\/40 { background-color: rgba(47, 40, 35, 0.4) !important; }
+html.dark .bg-ink-50\/50 { background-color: rgba(47, 40, 35, 0.5) !important; }
+html.dark .bg-ink-50\/60 { background-color: rgba(47, 40, 35, 0.6) !important; }
 
 * {
   border-color: rgb(var(--border));

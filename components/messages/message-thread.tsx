@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { TemplatePicker } from './template-picker';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 import { cn, formatDateTime } from '@/lib/utils';
 
@@ -145,7 +146,13 @@ export function MessageThread({
       </div>
 
       {/* 送信ボックス */}
-      <div className="border-t border-ink-100 p-3">
+      <div className="border-t border-ink-100 p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <TemplatePicker
+            memberName={conversationName}
+            onPick={(t) => setText((cur) => (cur ? `${cur}\n${t}` : t))}
+          />
+        </div>
         <div className="flex gap-2 items-end">
           <Textarea
             value={text}

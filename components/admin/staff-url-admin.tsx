@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CopyButton } from '@/components/ui/copy-button';
+import { QrCodeButton } from '@/components/ui/qr-code';
 import { useToast } from '@/components/ui/toast';
 import { ExternalLink, RefreshCw, FileBarChart2, MapPin, Sparkles } from 'lucide-react';
 
@@ -150,6 +151,7 @@ function UrlRow({
           {url}
         </code>
         <CopyButton value={url} />
+        <QrCodeButton value={url} label={label} />
         <a
           href={url}
           target="_blank"

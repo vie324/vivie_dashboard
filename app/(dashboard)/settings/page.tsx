@@ -4,6 +4,7 @@ import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { StoreSettings } from '@/components/settings/store-settings';
 import { StaffSettings } from '@/components/settings/staff-settings';
+import { StaffInviteForm } from '@/components/settings/staff-invite-form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
@@ -39,11 +40,14 @@ export default async function SettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>スタッフ</CardTitle>
-          <p className="mt-1 text-xs text-ink-500">
-            スタッフを Supabase Auth に登録した後、このページから役割と所属を設定してください。
-          </p>
+        <CardHeader className="flex items-center justify-between">
+          <div>
+            <CardTitle>スタッフ</CardTitle>
+            <p className="mt-1 text-xs text-ink-500">
+              「スタッフを追加」からアカウント発行が完結します
+            </p>
+          </div>
+          {staff.role === 'admin' && <StaffInviteForm stores={(stores ?? []) as any} />}
         </CardHeader>
         <CardContent>
           <StaffSettings staff={(allStaff ?? []) as any} stores={(stores ?? []) as any} canEdit={staff.role === 'admin'} />

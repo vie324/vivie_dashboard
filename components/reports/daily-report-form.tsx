@@ -16,29 +16,39 @@ interface Props {
   defaultStoreId?: string | null;
   // 公開トークン経由の場合は token を渡す
   token?: string;
+  // 編集モード
+  initial?: any;
 }
 
-export function DailyReportForm({ stores, staffId, staffName, defaultStoreId, token }: Props) {
+export function DailyReportForm({
+  stores,
+  staffId,
+  staffName,
+  defaultStoreId,
+  token,
+  initial,
+}: Props) {
+  const isEditing = !!initial?.id;
   const router = useRouter();
   const toast = useToast();
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    store_id: defaultStoreId ?? stores[0]?.id ?? '',
-    report_date: todayISO(),
-    hpb_new_count: 0,
-    hpb_contract_count: 0,
-    meta_new_count: 0,
-    meta_contract_count: 0,
-    referral_new_count: 0,
-    referral_contract_count: 0,
-    existing_treatment_count: 0,
-    repeat_count: 0,
-    total_sales: 0,
-    discount_total: 0,
-    highlights: '',
-    challenges: '',
-    next_actions: '',
+    store_id: initial?.store_id ?? defaultStoreId ?? stores[0]?.id ?? '',
+    report_date: initial?.report_date ?? todayISO(),
+    hpb_new_count: initial?.hpb_new_count ?? 0,
+    hpb_contract_count: initial?.hpb_contract_count ?? 0,
+    meta_new_count: initial?.meta_new_count ?? 0,
+    meta_contract_count: initial?.meta_contract_count ?? 0,
+    referral_new_count: initial?.referral_new_count ?? 0,
+    referral_contract_count: initial?.referral_contract_count ?? 0,
+    existing_treatment_count: initial?.existing_treatment_count ?? 0,
+    repeat_count: initial?.repeat_count ?? 0,
+    total_sales: initial?.total_sales ?? 0,
+    discount_total: initial?.discount_total ?? 0,
+    highlights: initial?.highlights ?? '',
+    challenges: initial?.challenges ?? '',
+    next_actions: initial?.next_actions ?? '',
   });
 
   function num<K extends keyof typeof form>(key: K, value: string) {
