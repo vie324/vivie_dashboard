@@ -13,6 +13,7 @@ import {
   X,
   CreditCard,
   Activity,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Staff } from '@/types/database';
@@ -28,7 +29,10 @@ const baseItems = [
   { href: '/attendance', label: '勤怠', icon: MapPin },
 ];
 
-const adminItems = [{ href: '/settings', label: '設定', icon: Settings }];
+const adminItems = [
+  { href: '/admin', label: '管理コンソール', icon: ShieldCheck },
+  { href: '/settings', label: '設定', icon: Settings },
+];
 
 export function Sidebar({
   staff,

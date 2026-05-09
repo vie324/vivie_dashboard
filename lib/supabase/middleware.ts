@@ -6,7 +6,9 @@ const PUBLIC_PATHS = [
   '/login',
   '/auth',
   '/counseling/public',
-  '/staff/report',
+  // /staff/* 配下は全てトークン認証なので公開扱い
+  '/staff/',
+  '/api/staff/',
   '/api/square/webhook',
   '/_next',
   '/favicon.ico',
