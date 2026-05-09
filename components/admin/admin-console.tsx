@@ -2,11 +2,12 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
-import { Wallet, MapPin, Link2 } from 'lucide-react';
+import { Wallet, MapPin, Link2, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CashbookAdmin } from './cashbook-admin';
 import { AttendanceAdmin } from './attendance-admin';
 import { StaffUrlAdmin } from './staff-url-admin';
+import { LineAdmin } from './line-admin';
 
 interface Props {
   currentTab: string;
@@ -22,6 +23,7 @@ const tabs = [
   { key: 'cashbook', label: '出納帳', icon: Wallet },
   { key: 'attendance', label: '勤怠', icon: MapPin },
   { key: 'urls', label: 'スタッフ URL', icon: Link2 },
+  { key: 'line', label: 'LINE 診断', icon: MessageCircle },
 ];
 
 export function AdminConsole({
@@ -90,6 +92,7 @@ export function AdminConsole({
             <AttendanceAdmin logs={attendance} stores={stores} staff={staff} />
           )}
           {currentTab === 'urls' && <StaffUrlAdmin staff={staff} canManage={canManageStaff} />}
+          {currentTab === 'line' && <LineAdmin />}
         </CardContent>
       </Card>
     </div>

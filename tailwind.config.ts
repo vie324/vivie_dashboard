@@ -10,10 +10,11 @@ const config: Config = {
     extend: {
       colors: {
         vivie: {
-          50: '#FBF4F4',
-          100: '#F5E5E4',
-          200: '#EAC9C7',
-          300: '#DCA9A8',
+          DEFAULT: '#DCA9A8',
+          50: '#FCF6F6',
+          100: '#F8E8E7',
+          200: '#EFCFCD',
+          300: '#DCA9A8',  /* ブランドカラー */
           400: '#C98785',
           500: '#B36A68',
           600: '#955351',

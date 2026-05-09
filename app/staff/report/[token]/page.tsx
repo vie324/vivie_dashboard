@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { createServiceClient } from '@/lib/supabase/server';
 import { DailyReportForm } from '@/components/reports/daily-report-form';
 import { ToastProvider } from '@/components/ui/toast';
-import { Sparkles } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ export default async function StaffReportPage({
 
   return (
     <ToastProvider>
-      <main className="min-h-screen bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4 py-8">
+      <main className="min-h-screen bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4 py-8">
         <div className="mx-auto max-w-2xl">
           <div className="mb-4">
             <a
@@ -41,8 +41,14 @@ export default async function StaffReportPage({
           </div>
 
           <header className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-vivie-100 text-vivie-600">
-              <Sparkles size={22} />
+            <div className="flex items-center justify-center gap-2.5 mb-3">
+              <LogoIcon size="sm" asImage />
+              <span
+                className="font-serif text-lg text-vivie-500"
+                style={{ letterSpacing: '0.14em' }}
+              >
+                vivie
+              </span>
             </div>
             <h1 className="font-serif text-3xl font-semibold text-ink-900">
               {staff.display_name} さんの日報
@@ -50,7 +56,7 @@ export default async function StaffReportPage({
             <p className="mt-2 text-sm text-ink-500">
               本日の集客・施術・売上を記入してください
             </p>
-            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-vivie-100 px-3 py-1 text-xs font-medium text-vivie-700">
+            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-vivie-200/70 px-3 py-1 text-xs font-medium text-vivie-800">
               ⚡ {staff.display_name} として記録されます
             </p>
           </header>

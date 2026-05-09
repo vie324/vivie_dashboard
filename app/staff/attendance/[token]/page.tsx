@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { createServiceClient } from '@/lib/supabase/server';
 import { ToastProvider } from '@/components/ui/toast';
 import { StaffAttendancePanel } from '@/components/attendance/staff-attendance-panel';
-import { Sparkles, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,7 @@ export default async function StaffAttendancePage({
 
   return (
     <ToastProvider>
-      <main className="min-h-screen bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4 py-8">
+      <main className="min-h-screen bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4 py-8">
         <div className="mx-auto max-w-md">
           <div className="mb-4">
             <Link
@@ -49,14 +50,20 @@ export default async function StaffAttendancePage({
           </div>
 
           <header className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-vivie-100 text-vivie-600">
-              <Sparkles size={22} />
+            <div className="flex items-center justify-center gap-2.5 mb-3">
+              <LogoIcon size="sm" asImage />
+              <span
+                className="font-serif text-lg text-vivie-500"
+                style={{ letterSpacing: '0.14em' }}
+              >
+                vivie
+              </span>
             </div>
             <h1 className="font-serif text-2xl font-semibold text-ink-900">
               {(staff as any).display_name} さんの打刻
             </h1>
             <p className="mt-1 text-sm text-ink-500">店舗の半径内で打刻可能</p>
-            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-vivie-100 px-3 py-1 text-xs font-medium text-vivie-700">
+            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-vivie-200/70 px-3 py-1 text-xs font-medium text-vivie-800">
               ⚡ {(staff as any).display_name} として記録されます
             </p>
           </header>

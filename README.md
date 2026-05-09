@@ -1,6 +1,6 @@
-# Vivie Dashboard
+# vivie Dashboard
 
-エステサロン Vivie の統合管理ダッシュボード。
+エステサロン vivie の統合管理ダッシュボード。
 **Next.js 14 (App Router) + Supabase + Square API + Vercel** で構築。
 
 ## 主な機能
@@ -207,4 +207,4 @@ npm run typecheck  # TypeScript チェック
 
 ## ライセンス
 
-私的利用 (Vivie 専用)。
+私的利用 (vivie 専用)。

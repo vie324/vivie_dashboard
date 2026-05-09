@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createServiceClient } from '@/lib/supabase/server';
 import { ToastProvider } from '@/components/ui/toast';
-import { Sparkles, FileBarChart2, MapPin, ChevronRight } from 'lucide-react';
+import { FileBarChart2, MapPin, ChevronRight } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/logo';
 import { formatDateTime } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -42,11 +43,17 @@ export default async function StaffHubPage({ params }: { params: { token: string
 
   return (
     <ToastProvider>
-      <main className="min-h-screen bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4 py-10">
+      <main className="min-h-screen bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4 py-10">
         <div className="mx-auto max-w-md">
           <header className="mb-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-vivie-100 text-vivie-600">
-              <Sparkles size={22} />
+            <div className="flex items-center justify-center gap-2.5 mb-4">
+              <LogoIcon size="sm" asImage />
+              <span
+                className="font-serif text-xl text-vivie-500"
+                style={{ letterSpacing: '0.14em' }}
+              >
+                vivie
+              </span>
             </div>
             <h1 className="font-serif text-2xl font-semibold text-ink-900">
               {(staff as any).display_name}
