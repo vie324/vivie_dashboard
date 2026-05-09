@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 250 247 245;
+  --foreground: 31 27 22;
+  --primary: 220 169 168;
+  --primary-foreground: 31 27 22;
+  --muted: 239 237 233;
+  --muted-foreground: 107 99 89;
+  --border: 217 213 206;
+  --ring: 201 135 133;
+}
+
+.dark {
+  --background: 26 22 19;
+  --foreground: 245 229 228;
+  --primary: 201 135 133;
+  --primary-foreground: 245 229 228;
+  --muted: 47 40 35;
+  --muted-foreground: 182 175 164;
+  --border: 63 58 51;
+  --ring: 220 169 168;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html,
+body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-feature-settings: 'palt';
+}
+
+@layer base {
+  body {
+    @apply text-ink-900 antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-serif tracking-tight;
+  }
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-2xl border border-ink-100 bg-white shadow-sm;
+  }
+  .surface-muted {
+    @apply rounded-2xl border border-ink-100 bg-ink-50;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
+           transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vivie-400
+           focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-vivie-400 text-white hover:bg-vivie-500 active:scale-[.98];
+  }
+  .btn-secondary {
+    @apply btn bg-white border border-ink-200 text-ink-700 hover:bg-ink-50;
+  }
+  .btn-ghost {
+    @apply btn hover:bg-ink-100 text-ink-700;
+  }
+  .btn-danger {
+    @apply btn bg-red-500 text-white hover:bg-red-600;
+  }
+  .field-label {
+    @apply block text-xs font-medium text-ink-500 mb-1.5;
+  }
+  .field-input {
+    @apply w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm
+           focus:outline-none focus:ring-2 focus:ring-vivie-300 focus:border-vivie-300
+           placeholder:text-ink-300;
+  }
+  .field-textarea {
+    @apply field-input min-h-[5rem] resize-y;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-700;
+  }
+  .chip-active {
+    @apply chip bg-vivie-100 text-vivie-700;
+  }
+  .table-base {
+    @apply w-full text-sm;
+  }
+  .table-base thead th {
+    @apply px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-ink-500
+           border-b border-ink-100 bg-ink-50/60;
+  }
+  .table-base tbody td {
+    @apply px-3 py-3 border-b border-ink-100 text-ink-900;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-vivie-50/40;
+  }
+}
