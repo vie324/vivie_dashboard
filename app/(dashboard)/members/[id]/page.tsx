@@ -31,7 +31,7 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
     .maybeSingle();
   if (!member) notFound();
 
-  const [{ data: subs }, { data: visits }, { data: counseling }] = await Promise.all([
+  const [{ data: subs }, { data: visits }, { data: counseling }, { data: treatments }] = await Promise.all([
     supabase
       .from('member_subscriptions')
       .select('*, plan:subscription_plans(name, monthly_price)')
@@ -48,6 +48,12 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
       .select('id, submitted_at, skin_concerns, face_concerns, body_concerns')
       .eq('member_id', params.id)
       .order('submitted_at', { ascending: false }),
+    supabase
+      .from('treatment_reports')
+      .select('id, treatment_date, menu, amount, skin_scores, face_scores')
+      .eq('member_id', params.id)
+      .order('treatment_date', { ascending: false })
+      .limit(20),
   ]);
 
   return (
@@ -169,6 +175,49 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>施術レポート</CardTitle>
+          <Link href={`/treatments/new?member=${member.id}`}>
+            <Button size="sm" variant="secondary">
+              <Pencil size={14} />
+              新規入力
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(treatments ?? []).length === 0 ? (
+            <p className="p-5 text-sm text-ink-400">まだ施術レポートはありません</p>
+          ) : (
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>メニュー</th>
+                  <th className="text-right">金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(treatments ?? []).map((t: any) => (
+                  <tr key={t.id}>
+                    <td>
+                      <Link
+                        href={`/treatments/${t.id}`}
+                        className="text-ink-900 hover:text-vivie-600 font-medium"
+                      >
+                        {formatDate(t.treatment_date)}
+                      </Link>
+                    </td>
+                    <td className="text-ink-600">{t.menu ?? '—'}</td>
+                    <td className="text-right">{t.amount ? formatYen(t.amount) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
 
       {member.notes && (
         <Card>

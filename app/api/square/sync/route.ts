@@ -64,25 +64,57 @@ export async function POST() {
   }
   const supabase = createServiceClient();
 
-  // 1) Catalog: SUBSCRIPTION_PLAN を取得 (失敗しても致命的ではない)
+  // 1) Catalog: SUBSCRIPTION_PLAN と SUBSCRIPTION_PLAN_VARIATION を取得
+  // Square では PLAN は親(名前のみ)、VARIATION が実際の価格を持つ
+  // Subscription.planVariationId は VARIATION を参照するため、両方保存して
+  // VARIATION 側を square_plan_id にマッピングする
   try {
-    const catalogRes = await sq.catalogApi.searchCatalogObjects({
+    // 親プランの名前を引くために Map で保持
+    const planNameById = new Map<string, string>();
+
+    const parentRes = await sq.catalogApi.searchCatalogObjects({
       objectTypes: ['SUBSCRIPTION_PLAN'],
       limit: 100,
     });
-    const planObjects = catalogRes.result.objects ?? [];
-    for (const obj of planObjects) {
-      const plan = (obj as any).subscriptionPlanData;
-      if (!plan) continue;
-      const phases: any[] = plan.phases ?? [];
-      const monthlyPhase = phases[0];
-      const monthlyPrice = monthlyPhase?.recurringPriceMoney?.amount
-        ? Number(monthlyPhase.recurringPriceMoney.amount)
-        : 0;
+    for (const obj of parentRes.result.objects ?? []) {
+      const data = (obj as any).subscriptionPlanData;
+      if (data?.name && obj.id) planNameById.set(obj.id, data.name);
+    }
+
+    // VARIATION (価格を持つ単位)
+    const varRes = await sq.catalogApi.searchCatalogObjects({
+      objectTypes: ['SUBSCRIPTION_PLAN_VARIATION'],
+      limit: 100,
+    });
+    for (const obj of varRes.result.objects ?? []) {
+      const variation = (obj as any).subscriptionPlanVariationData;
+      if (!variation) continue;
+
+      // 価格は phases[*].pricing.price (新) または recurringPriceMoney (旧) に存在
+      const phases: any[] = variation.phases ?? [];
+      const findRecurring = (p: any) =>
+        ['MONTHLY', 'EVERY_30_DAYS', 'EVERY_4_WEEKS', 'EVERY_MONTH'].includes(p?.cadence);
+      const monthlyPhase = phases.find(findRecurring) ?? phases[0];
+      const priceAmount =
+        monthlyPhase?.pricing?.price?.amount ??
+        monthlyPhase?.pricing?.priceMoney?.amount ??
+        monthlyPhase?.recurringPriceMoney?.amount ??
+        0;
+      const monthlyPrice = Number(priceAmount) || 0;
+
+      const parentName = variation.subscriptionPlanId
+        ? planNameById.get(variation.subscriptionPlanId)
+        : null;
+      const variationName = variation.name ?? null;
+      const displayName =
+        parentName && variationName
+          ? `${parentName} (${variationName})`
+          : variationName || parentName || '名称未設定';
+
       const { error: planErr } = await supabase.from('subscription_plans').upsert(
         {
           square_plan_id: obj.id,
-          name: plan.name ?? '名称未設定',
+          name: displayName,
           monthly_price: monthlyPrice,
           is_active: !obj.isDeleted,
         },

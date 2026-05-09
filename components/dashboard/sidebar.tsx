@@ -12,6 +12,7 @@ import {
   Sparkles,
   X,
   CreditCard,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Staff } from '@/types/database';
@@ -21,6 +22,7 @@ const baseItems = [
   { href: '/members', label: '会員管理', icon: Users },
   { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
   { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
+  { href: '/treatments', label: '施術レポート', icon: Activity },
   { href: '/cashbook', label: '出納帳', icon: Wallet },
   { href: '/reports', label: '日報', icon: FileBarChart2 },
   { href: '/attendance', label: '勤怠', icon: MapPin },
