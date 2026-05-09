@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/database';
 
@@ -26,17 +27,18 @@ export function createClient() {
   );
 }
 
-// service role: サーバー側専用。RLS をバイパスする操作 (Square Webhook 等) で使用
+// service role: サーバー側専用。RLS を完全にバイパスする。
+// Cookie ベースの SSR クライアントだと user JWT が混入することがあるため、
+// 通常の supabase-js クライアントを直接使う。
 export function createServiceClient() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
   }
-  return createServerClient<Database>(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     {
-      cookies: { getAll: () => [], setAll: () => {} },
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false },
     },
   );
 }
