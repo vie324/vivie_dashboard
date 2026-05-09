@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { squareClient, squareLocationIds, safeJson } from '@/lib/square/client';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient, getServiceRoleStatus } from '@/lib/supabase/server';
 
 // Square SDK のエラーから人間に分かりやすいメッセージを抽出
 function describeSquareError(err: unknown, step: string): string {
@@ -30,6 +30,18 @@ export async function POST() {
   if (!process.env.SQUARE_ACCESS_TOKEN) {
     return NextResponse.json(
       { error: 'SQUARE_ACCESS_TOKEN が未設定です。Vercel の環境変数を確認してください。' },
+      { status: 500 },
+    );
+  }
+
+  // service_role キーが正しく設定されているか検証
+  const sr = getServiceRoleStatus();
+  if (!sr.ok) {
+    return NextResponse.json(
+      {
+        error: sr.reason ?? 'SUPABASE_SERVICE_ROLE_KEY が不正です',
+        hint: 'Supabase ダッシュボード > Settings > API から "service_role" secret を取得し、Vercel 環境変数を更新してください',
+      },
       { status: 500 },
     );
   }
