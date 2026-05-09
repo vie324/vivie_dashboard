@@ -29,9 +29,18 @@ export default async function StaffReportPage({
 
   return (
     <ToastProvider>
-      <main className="min-h-screen bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4 py-10">
+      <main className="min-h-screen bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4 py-8">
         <div className="mx-auto max-w-2xl">
-          <header className="mb-8 text-center">
+          <div className="mb-4">
+            <a
+              href={`/staff/${params.token}`}
+              className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-vivie-600"
+            >
+              ← ハブに戻る
+            </a>
+          </div>
+
+          <header className="mb-6 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-vivie-100 text-vivie-600">
               <Sparkles size={22} />
             </div>
@@ -40,6 +49,9 @@ export default async function StaffReportPage({
             </h1>
             <p className="mt-2 text-sm text-ink-500">
               本日の集客・施術・売上を記入してください
+            </p>
+            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-vivie-100 px-3 py-1 text-xs font-medium text-vivie-700">
+              ⚡ {staff.display_name} として記録されます
             </p>
           </header>
           <DailyReportForm
