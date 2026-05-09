@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/logo';
 
 function LoginForm() {
   const router = useRouter();
@@ -41,11 +42,14 @@ function LoginForm() {
       className="w-full max-w-sm rounded-3xl border border-ink-100 bg-white p-8 shadow-xl shadow-vivie-100/40"
     >
       <div className="mb-6 flex flex-col items-center text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-vivie-100 text-vivie-600">
-          <Sparkles size={24} />
-        </div>
-        <h1 className="text-xl font-semibold font-serif text-ink-900">Vivie Dashboard</h1>
-        <p className="mt-1 text-sm text-ink-500">スタッフアカウントでログイン</p>
+        <LogoIcon size="lg" asImage className="mb-3" />
+        <h1
+          className="font-serif text-3xl text-vivie-500"
+          style={{ letterSpacing: '0.16em' }}
+        >
+          vivie
+        </h1>
+        <p className="mt-2 text-sm text-ink-500">スタッフアカウントでログイン</p>
       </div>
 
       <div className="space-y-4">
@@ -87,7 +91,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-vivie-50 via-white to-ink-50 px-4">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4">
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>

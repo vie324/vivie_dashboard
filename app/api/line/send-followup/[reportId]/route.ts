@@ -51,7 +51,7 @@ export async function POST(
 
   const flex = buildFollowupFlex({
     customerName: r.member.full_name,
-    storeName: r.store?.name ?? 'Vivie',
+    storeName: r.store?.name ?? 'vivie',
     treatmentDate: r.treatment_date,
     skinScores: r.skin_scores ?? {},
     faceScores: r.face_scores ?? {},

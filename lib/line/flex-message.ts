@@ -256,7 +256,7 @@ export function buildFollowupFlex(args: BuildArgs) {
         contents: [
           {
             type: 'text',
-            text: 'Vivie',
+            text: 'vivie',
             weight: 'bold',
             color: '#FFFFFF',
             size: 'lg',

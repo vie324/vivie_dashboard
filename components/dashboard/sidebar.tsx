@@ -10,7 +10,6 @@ import {
   FileBarChart2,
   MapPin,
   Settings,
-  Sparkles,
   X,
   CreditCard,
   Activity,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { LogoIcon } from '@/components/ui/logo';
 import type { Staff } from '@/types/database';
 
 interface NavItem {
@@ -140,11 +140,14 @@ export function Sidebar({
         )}
       >
         <div className="flex items-center justify-between px-5 py-5 shrink-0">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-vivie-100 text-vivie-600">
-              <Sparkles size={18} />
+          <Link href="/" className="flex items-center gap-2.5">
+            <LogoIcon size="sm" asImage />
+            <span
+              className="font-serif text-xl text-vivie-500"
+              style={{ letterSpacing: '0.12em' }}
+            >
+              vivie
             </span>
-            <span className="font-serif text-lg font-semibold text-ink-900">Vivie</span>
           </Link>
           <button
             onClick={onClose}

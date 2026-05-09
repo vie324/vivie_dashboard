@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Noto_Sans_JP, Shippori_Mincho } from 'next/font/google';
+import { SplashScreen } from '@/components/ui/splash-screen';
 import './globals.css';
 
 const notoSansJp = Noto_Sans_JP({
@@ -17,9 +18,13 @@ const shippori = Shippori_Mincho({
 });
 
 export const metadata: Metadata = {
-  title: 'Vivie Dashboard',
-  description: 'エステサロン Vivie の統合管理ダッシュボード',
-  applicationName: 'Vivie',
+  title: 'vivie',
+  description: 'エステサロン vivie の統合管理ダッシュボード',
+  applicationName: 'vivie',
+  icons: {
+    icon: '/vivie-logo.png',
+    apple: '/vivie-logo.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -31,7 +36,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className={`${notoSansJp.variable} ${shippori.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <SplashScreen />
+        {children}
+      </body>
     </html>
   );
 }
