@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -14,13 +15,16 @@ import {
   CreditCard,
   Activity,
   ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 import type { Staff } from '@/types/database';
 
 const baseItems = [
   { href: '/', label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/members', label: '会員管理', icon: Users },
+  { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true },
   { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
   { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
   { href: '/treatments', label: '施術レポート', icon: Activity },
@@ -45,6 +49,33 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const items = [...baseItems, ...(staff.role !== 'staff' ? adminItems : [])];
+  const [unread, setUnread] = useState<number>(0);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    async function load() {
+      const { count } = await supabase
+        .from('line_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('direction', 'inbound')
+        .is('read_at', null);
+      if (!cancelled) setUnread(count ?? 0);
+    }
+    load();
+    const channel = supabase
+      .channel('sidebar-unread')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'line_messages' },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <>
@@ -85,6 +116,7 @@ export function Sidebar({
                   ? pathname === '/'
                   : pathname.startsWith(item.href);
               const Icon = item.icon;
+              const showBadge = (item as any).showBadge && unread > 0;
               return (
                 <li key={item.href}>
                   <Link
@@ -98,7 +130,12 @@ export function Sidebar({
                     )}
                   >
                     <Icon size={18} className={active ? 'text-vivie-500' : 'text-ink-500'} />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className="inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full bg-vivie-500 px-1.5 text-xs font-medium text-white">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

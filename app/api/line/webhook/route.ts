@@ -51,12 +51,23 @@ export async function POST(request: NextRequest) {
     if (userId) {
       const { data: existing } = await supabase
         .from('members')
-        .select('id')
+        .select('id, line_display_name')
         .eq('line_user_id', userId)
         .maybeSingle();
       memberId = (existing as any)?.id ?? null;
+
+      // friend イベントなら表示名を上書き保存
+      if (memberId && (event.type === 'follow' || event.type === 'message')) {
+        if (displayName) {
+          await supabase
+            .from('members')
+            .update({ line_display_name: displayName, line_picture_url: pictureUrl })
+            .eq('id', memberId);
+        }
+      }
     }
 
+    // 1) イベントログ
     await supabase.from('line_events').insert({
       event_type: event.type,
       line_user_id: userId ?? null,
@@ -66,6 +77,44 @@ export async function POST(request: NextRequest) {
       raw: event,
       member_id: memberId,
     });
+
+    // 2) message イベントの場合はチャット履歴 (line_messages) にも保存
+    if (event.type === 'message' && userId) {
+      const msgType = event.message?.type ?? 'text';
+      const text =
+        msgType === 'text'
+          ? event.message?.text ?? null
+          : msgType === 'sticker'
+            ? '(スタンプ)'
+            : msgType === 'image'
+              ? '(画像)'
+              : msgType === 'video'
+                ? '(動画)'
+                : `(${msgType})`;
+      await supabase.from('line_messages').insert({
+        line_user_id: userId,
+        member_id: memberId,
+        direction: 'inbound',
+        message_type: msgType,
+        message_text: text,
+        content: event.message ?? null,
+        line_message_id: event.message?.id ?? null,
+        sent_at: event.timestamp ? new Date(event.timestamp).toISOString() : new Date().toISOString(),
+      });
+    }
+
+    // 3) follow / unfollow イベントは会話のヘッダー用にシステムメッセージとして残す
+    if ((event.type === 'follow' || event.type === 'unfollow') && userId) {
+      await supabase.from('line_messages').insert({
+        line_user_id: userId,
+        member_id: memberId,
+        direction: 'inbound',
+        message_type: 'system',
+        message_text: event.type === 'follow' ? '友だちに追加されました' : 'ブロックされました',
+        content: { event_type: event.type },
+        sent_at: event.timestamp ? new Date(event.timestamp).toISOString() : new Date().toISOString(),
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });
