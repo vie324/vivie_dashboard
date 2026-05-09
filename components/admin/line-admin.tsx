@@ -27,6 +27,20 @@ interface Diag {
     channel_secret_set: boolean;
     webhook_url: string;
     app_url: string;
+    url_reachable: boolean | null;
+    url_reachable_error: string | null;
+  };
+  bot_info: {
+    userId?: string;
+    basicId?: string;
+    displayName?: string;
+    pictureUrl?: string;
+  } | null;
+  line_webhook: {
+    registered_url: string | null;
+    enabled: boolean | null;
+    url_matches: boolean;
+    fetch_error: string | null;
   };
   counts: {
     total_events: number;
@@ -150,10 +164,70 @@ export function LineAdmin() {
         </CardContent>
       </Card>
 
-      {/* Webhook URL */}
+      {/* Bot 情報 */}
+      {diag.bot_info && (
+        <Card>
+          <CardContent>
+            <p className="text-xs font-medium text-ink-500 mb-2">
+              連携中の LINE 公式アカウント
+              <span className="ml-2 text-[10px] text-ink-400">(これが対象のサロンと一致するか確認)</span>
+            </p>
+            <div className="flex items-center gap-3">
+              {diag.bot_info.pictureUrl && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={diag.bot_info.pictureUrl} alt="" className="h-12 w-12 rounded-full" />
+              )}
+              <div>
+                <p className="font-medium">{diag.bot_info.displayName ?? '—'}</p>
+                <p className="text-xs text-ink-400">Basic ID: {diag.bot_info.basicId ?? '—'}</p>
+                <p className="text-xs text-ink-400 font-mono break-all">User ID: {diag.bot_info.userId}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* LINE 側の登録 URL と Vivie 側のあるべき URL の一致確認 */}
       <Card>
-        <CardContent>
-          <p className="text-xs font-medium text-ink-500 mb-2">
+        <CardContent className="space-y-3">
+          <p className="text-xs font-medium text-ink-500">
+            LINE 側に登録された Webhook 設定 (LINE API から取得)
+          </p>
+          {diag.line_webhook.fetch_error ? (
+            <p className="text-xs text-red-700">{diag.line_webhook.fetch_error}</p>
+          ) : (
+            <>
+              <CheckRow
+                ok={diag.line_webhook.url_matches}
+                label={
+                  diag.line_webhook.url_matches
+                    ? 'LINE 登録 URL と一致しています'
+                    : '一致していません！LINE Developers で URL を更新してください'
+                }
+                help={`登録済: ${diag.line_webhook.registered_url ?? '(未登録)'}`}
+              />
+              <CheckRow
+                ok={diag.line_webhook.enabled === true}
+                label={
+                  diag.line_webhook.enabled
+                    ? 'Webhook が有効化されています'
+                    : 'Webhook が OFF です。LINE Developers で「Use webhook」を ON に'
+                }
+              />
+            </>
+          )}
+
+          <CheckRow
+            ok={diag.config.url_reachable === true}
+            label={
+              diag.config.url_reachable
+                ? 'Webhook URL は外部から到達可能です'
+                : `Webhook URL に到達できません ${diag.config.url_reachable_error ? `(${diag.config.url_reachable_error})` : ''}`
+            }
+            help="Vercel から自分の Webhook URL に GET リクエストして確認"
+          />
+
+          <p className="text-xs font-medium text-ink-500 mt-4 mb-2">
             LINE Developers の Webhook URL に登録すべき値
           </p>
           <div className="flex items-center gap-2">
@@ -237,18 +311,58 @@ export function LineAdmin() {
               </div>
 
               <div className="rounded-xl bg-white border border-amber-200 p-3">
-                <p className="font-medium text-amber-900 mb-2">③ テスト送信</p>
+                <p className="font-medium text-amber-900 mb-2">③ Bot を友だち追加</p>
+                <p className="text-xs text-ink-600">
+                  メッセージを送る人が <strong>友だち追加していない</strong> と Webhook は届きません。
+                  LINE Developers Console &gt; Messaging API &gt; QR コードをスマホで読み取って追加してください。
+                  オーナー本人でも追加が必要です。
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">④ Vercel Deployment Protection</p>
+                <p className="text-xs text-ink-600">
+                  Vercel ダッシュボード &gt; Project Settings &gt; <strong>Deployment Protection</strong> で
+                  Password Protection / Vercel Authentication が ON だと、LINE からの POST もブロックされます。
+                  ここは Disabled にしてください。Webhook URL 到達性チェックでも分かります。
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">⑤ チャネル間違い</p>
+                <p className="text-xs text-ink-600">
+                  LINE Developers で複数のチャネル (Messaging API / LIFF 等) を作っている場合、
+                  Token を別チャネルから取り違えていないか確認。上の「連携中の LINE 公式アカウント」の表示名が
+                  実際のサロン名と一致するかチェック。
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">⑥ Webhook 自動無効化</p>
+                <p className="text-xs text-ink-600 mb-1">
+                  過去に Webhook が連続でエラーを返すと LINE が自動で無効化することがあります。
+                  上の Webhook 状態が「OFF」ならこれが原因。Developers Console で「Use webhook」を ON に戻してください。
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">⑦ DB 書き込みテスト</p>
                 <p className="text-xs text-ink-600 mb-2">
-                  自分の LINE で公式アカウントに「テスト」と送信して、ここに表示されるか確認してください。
-                  友だち追加が必要です (Developers Console &gt; Messaging API &gt; QR コードから追加)。
+                  LINE を経由せず直接 DB にダミーレコードを入れます。これで「テストユーザー」が表示されれば
+                  Vivie 側の DB / Realtime は正常 → 問題は LINE → Vercel 通信。
                 </p>
                 <Button onClick={runTestEvent} disabled={testing} variant="secondary" size="sm">
                   {testing ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-                  DB 書き込みテスト (LINE を経由しない)
+                  DB 書き込みテスト
                 </Button>
-                <p className="mt-2 text-xs text-ink-500">
-                  これでテストユーザーが表示されれば DB は正常 →
-                  実 LINE のメッセージが届かないのは ① か ② の設定問題
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">⑧ Vercel ログを確認</p>
+                <p className="text-xs text-ink-600">
+                  Vercel ダッシュボード &gt; Project &gt; <strong>Logs</strong> で
+                  「<code>[LINE webhook]</code>」を検索。LINE から POST が届いていれば
+                  「<code>[LINE webhook] received</code>」がログに残ります。届いていなければ LINE 側の問題。
                 </p>
               </div>
             </div>

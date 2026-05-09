@@ -19,19 +19,44 @@ export async function POST(request: NextRequest) {
   const body = await request.text();
   const secret = process.env.LINE_CHANNEL_SECRET;
   const signature = request.headers.get('x-line-signature');
+  const userAgent = request.headers.get('user-agent') ?? '';
 
   console.log('[LINE webhook] received', {
     hasSignature: !!signature,
     bodyLength: body.length,
     secretSet: !!secret,
+    userAgent: userAgent.slice(0, 60),
   });
+
+  // 受信そのものを記録 (どのリクエストがどのタイミングで届いたか追跡用)
+  // 本物のイベントが 0 件でも、HEAD/Verify/空配列のリクエストもここで可視化される
+  try {
+    const supabase = createServiceClient();
+    let events: any[] = [];
+    try {
+      const parsed = JSON.parse(body);
+      events = Array.isArray(parsed.events) ? parsed.events : [];
+    } catch {
+      // ignore parse error - 後続処理で再度 JSON parse する
+    }
+    await supabase.from('line_events').insert({
+      event_type: events.length > 0 ? '_webhook_hit_with_events' : '_webhook_hit_empty',
+      raw: {
+        eventCount: events.length,
+        userAgent,
+        hasSignature: !!signature,
+        bodyPreview: body.slice(0, 300),
+      },
+    });
+  } catch (err) {
+    console.error('[LINE webhook] hit log failed', err);
+  }
 
   // 署名検証 (secret が設定されている時のみ)
   if (secret) {
     const ok = verifySignature(body, signature, secret);
     if (!ok) {
       console.error('[LINE webhook] signature verification failed');
-      // 署名失敗時もイベントは記録 (デバッグ用)
       try {
         const supabase = createServiceClient();
         await supabase.from('line_events').insert({
