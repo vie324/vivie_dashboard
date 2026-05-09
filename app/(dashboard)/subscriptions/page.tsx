@@ -4,8 +4,8 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { CreditCard, RefreshCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CreditCard } from 'lucide-react';
+import { SquareSyncButton } from '@/components/members/sync-button';
 import { formatDate, formatYen } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -34,14 +34,7 @@ export default async function SubscriptionsPage() {
       <PageHeader
         title="サブスク管理"
         description="Square から自動同期されるサブスクリプションを表示します"
-        actions={
-          <form action="/api/square/sync" method="post">
-            <Button type="submit" variant="secondary" size="sm">
-              <RefreshCcw size={14} />
-              Square 同期
-            </Button>
-          </form>
-        }
+        actions={<SquareSyncButton />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
