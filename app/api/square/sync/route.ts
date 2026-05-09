@@ -84,10 +84,17 @@ export async function POST() {
   }
 
   // 2) Customers (これが失敗したら止める)
+  // listCustomers は undefined 引数で URL が壊れる SDK バグがあるため
+  // body ベースの searchCustomers を使用
   try {
     let cursor: string | undefined;
     do {
-      const res = await sq.customersApi.listCustomers(cursor, 100, undefined, 'DESC');
+      const reqBody: any = {
+        limit: 100,
+        query: { sort: { field: 'CREATED_AT', order: 'DESC' } },
+      };
+      if (cursor) reqBody.cursor = cursor;
+      const res = await sq.customersApi.searchCustomers(reqBody);
       const customers = res.result.customers ?? [];
       for (const c of customers) {
         const fullName =
