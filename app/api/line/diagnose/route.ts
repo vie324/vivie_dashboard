@@ -14,19 +14,59 @@ export async function GET() {
   const secretSet = !!process.env.LINE_CHANNEL_SECRET;
   const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/line/webhook`;
 
-  // 1) Channel Access Token の有効性チェック (LINE API でグループプロフィール取得を試みる)
+  // 1) Channel Access Token の有効性チェック + Bot 情報取得
   let tokenValid: boolean | null = null;
   let tokenError: string | null = null;
+  let botInfo: { userId?: string; basicId?: string; displayName?: string; premiumId?: string; pictureUrl?: string } | null = null;
   if (tokenSet) {
     try {
       const res = await fetch('https://api.line.me/v2/bot/info', {
         headers: { authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
       });
       tokenValid = res.ok;
-      if (!res.ok) tokenError = await res.text();
+      if (res.ok) {
+        botInfo = await res.json();
+      } else {
+        tokenError = await res.text();
+      }
     } catch (err) {
       tokenValid = false;
       tokenError = err instanceof Error ? err.message : 'unknown';
+    }
+  }
+
+  // 1b) LINE 側に登録されている Webhook URL (Channel に紐付くもの) を取得
+  let registeredWebhookUrl: string | null = null;
+  let webhookEnabled: boolean | null = null;
+  let webhookFetchError: string | null = null;
+  if (tokenSet) {
+    try {
+      const res = await fetch('https://api.line.me/v2/bot/channel/webhook/endpoint', {
+        headers: { authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        registeredWebhookUrl = data.endpoint ?? null;
+        webhookEnabled = data.active ?? null;
+      } else {
+        webhookFetchError = `${res.status} ${await res.text()}`;
+      }
+    } catch (err) {
+      webhookFetchError = err instanceof Error ? err.message : 'unknown';
+    }
+  }
+
+  // 1c) Webhook URL が外部から到達可能か検証 (自分宛に GET)
+  let urlReachable: boolean | null = null;
+  let urlReachableError: string | null = null;
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try {
+      const res = await fetch(webhookUrl, { method: 'GET', cache: 'no-store' });
+      urlReachable = res.ok;
+      if (!res.ok) urlReachableError = `HTTP ${res.status}`;
+    } catch (err) {
+      urlReachable = false;
+      urlReachableError = err instanceof Error ? err.message : 'unknown';
     }
   }
 
@@ -60,6 +100,15 @@ export async function GET() {
       channel_secret_set: secretSet,
       webhook_url: webhookUrl,
       app_url: process.env.NEXT_PUBLIC_APP_URL ?? '(NEXT_PUBLIC_APP_URL 未設定)',
+      url_reachable: urlReachable,
+      url_reachable_error: urlReachableError,
+    },
+    bot_info: botInfo,
+    line_webhook: {
+      registered_url: registeredWebhookUrl,
+      enabled: webhookEnabled,
+      url_matches: registeredWebhookUrl === webhookUrl,
+      fetch_error: webhookFetchError,
     },
     counts: {
       total_events: eventCount ?? 0,
