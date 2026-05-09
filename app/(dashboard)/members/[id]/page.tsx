@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { LineLinkPanel } from '@/components/members/line-link-panel';
 import { Pencil } from 'lucide-react';
 import { formatDate, formatYen } from '@/lib/utils';
 import type { MemberStatus } from '@/types/database';
@@ -218,6 +219,13 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
           )}
         </CardContent>
       </Card>
+
+      <LineLinkPanel
+        memberId={member.id}
+        memberName={member.full_name}
+        currentLineUserId={(member as any).line_user_id ?? null}
+        currentLineDisplayName={(member as any).line_display_name ?? null}
+      />
 
       {member.notes && (
         <Card>
