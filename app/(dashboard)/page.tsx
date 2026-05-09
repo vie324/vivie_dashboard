@@ -7,6 +7,9 @@ import { Users, ClipboardList, Wallet, FileBarChart2, TrendingUp, CalendarRange 
 import { formatYen, formatDate, todayISO } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function DashboardHome() {
   const supabase = createClient();
   const staff = await getCurrentStaff();
