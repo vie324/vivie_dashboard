@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
+import { useToast } from '@/components/ui/toast';
 import {
   CheckCircle2,
   XCircle,
@@ -13,6 +14,8 @@ import {
   MessageCircle,
   ArrowDown,
   ArrowUp,
+  PlayCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
@@ -35,8 +38,10 @@ interface Diag {
 }
 
 export function LineAdmin() {
+  const toast = useToast();
   const [diag, setDiag] = useState<Diag | null>(null);
   const [loading, setLoading] = useState(true);
+  const [testing, setTesting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -46,6 +51,21 @@ export function LineAdmin() {
       setDiag(data);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runTestEvent() {
+    setTesting(true);
+    try {
+      const res = await fetch('/api/line/test-event', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'failed');
+      toast.show('テストイベントを記録しました。診断画面と /messages に反映されます', 'success');
+      load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : 'テストに失敗しました', 'error');
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -144,14 +164,97 @@ export function LineAdmin() {
           </div>
           <ol className="mt-3 space-y-1 text-xs text-ink-500 list-decimal pl-5">
             <li>LINE Developers Console &gt; Messaging API タブ</li>
-            <li>「Webhook URL」に上記をペースト</li>
+            <li>「Webhook URL」に上記をペースト + 「Update」を押す</li>
             <li>「Use webhook」を ON</li>
             <li>「Verify」をクリック → 200 が返れば OK</li>
-            <li>「Auto-reply messages」を OFF (これが ON だと自動応答に取られる)</li>
-            <li>応答メッセージで「webhook を使用」を選択</li>
           </ol>
         </CardContent>
       </Card>
+
+      {/* ⚠️ 受信されない場合の最重要チェック */}
+      {diag.counts.total_events === 0 && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={18} />
+              <div>
+                <p className="font-medium text-amber-900">
+                  受信イベントが 0 件 — 以下を必ず確認してください
+                </p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  設定値は正しくても、LINE 側のスイッチで受信が止まっているケースが大半です
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">
+                  ① LINE Official Account Manager の応答設定
+                  <span className="ml-2 inline-flex items-center text-[10px] rounded-full bg-amber-200 text-amber-900 px-2 py-0.5">
+                    最重要
+                  </span>
+                </p>
+                <p className="text-xs text-ink-600 mb-2">
+                  Developers Console とは<strong>別のサイト</strong>に応答機能の設定があります。
+                  ここで Webhook が OFF だと永遠に届きません。
+                </p>
+                <a
+                  href="https://manager.line.biz/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-vivie-600 hover:underline"
+                >
+                  <ExternalLink size={11} />
+                  manager.line.biz を開く
+                </a>
+                <ol className="mt-2 space-y-0.5 text-xs text-ink-600 list-decimal pl-5">
+                  <li>該当アカウントを選択</li>
+                  <li>左メニュー「設定」&gt;「応答設定」</li>
+                  <li>
+                    <strong>応答モード</strong>: <code className="bg-ink-100 px-1 rounded">Bot</code>
+                  </li>
+                  <li>
+                    <strong>あいさつメッセージ</strong>: お好みで (受信には影響なし)
+                  </li>
+                  <li>
+                    <strong>応答メッセージ</strong>:{' '}
+                    <code className="bg-red-50 text-red-700 px-1 rounded">オフ</code>
+                  </li>
+                  <li>
+                    <strong>Webhook</strong>:{' '}
+                    <code className="bg-emerald-50 text-emerald-700 px-1 rounded">オン</code>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">② Verify ボタンを再度実行</p>
+                <p className="text-xs text-ink-600">
+                  LINE Developers Console &gt; Messaging API &gt; Webhook URL の右にある
+                  「Verify」をクリック。**200** が返らない場合は URL が間違っています。
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white border border-amber-200 p-3">
+                <p className="font-medium text-amber-900 mb-2">③ テスト送信</p>
+                <p className="text-xs text-ink-600 mb-2">
+                  自分の LINE で公式アカウントに「テスト」と送信して、ここに表示されるか確認してください。
+                  友だち追加が必要です (Developers Console &gt; Messaging API &gt; QR コードから追加)。
+                </p>
+                <Button onClick={runTestEvent} disabled={testing} variant="secondary" size="sm">
+                  {testing ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+                  DB 書き込みテスト (LINE を経由しない)
+                </Button>
+                <p className="mt-2 text-xs text-ink-500">
+                  これでテストユーザーが表示されれば DB は正常 →
+                  実 LINE のメッセージが届かないのは ① か ② の設定問題
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 直近イベント */}
       <Card>
