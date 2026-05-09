@@ -25,16 +25,26 @@ export function SquareSyncButton() {
       if (body.subscriptions) parts.push(`サブスク ${body.subscriptions}件`);
       if (body.plans) parts.push(`プラン ${body.plans}件`);
       const warnings = (body.warnings ?? []) as string[];
+
+      // 警告は最大 3 件まで集約。コンソールには全件出す。
+      if (warnings.length > 0) {
+        console.warn('Square sync warnings:', warnings);
+      }
+      const summary = warnings.length > 0
+        ? `${warnings.length}件の警告あり (詳細はブラウザコンソール)`
+        : '';
+
       if (parts.length === 0 && warnings.length > 0) {
-        // 件数 0 で警告ありはエラー扱い
-        toast.show(`同期に問題があります: ${warnings[0]}`, 'error');
-        warnings.slice(1).forEach((w) => toast.show(w, 'error'));
+        toast.show(`同期に問題があります: ${warnings[0].slice(0, 200)}`, 'error');
+        if (warnings.length > 1) {
+          toast.show(`他 ${warnings.length - 1} 件の警告 (コンソール参照)`, 'error');
+        }
       } else {
         toast.show(
           parts.length ? `同期完了: ${parts.join(' / ')}` : '同期完了 (新規取得なし)',
           'success',
         );
-        warnings.forEach((w) => toast.show(w, 'info'));
+        if (summary) toast.show(summary, 'info');
       }
       router.refresh();
     } catch (err) {
