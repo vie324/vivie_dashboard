@@ -67,7 +67,7 @@ export async function POST() {
       const monthlyPrice = monthlyPhase?.recurringPriceMoney?.amount
         ? Number(monthlyPhase.recurringPriceMoney.amount)
         : 0;
-      await supabase.from('subscription_plans').upsert(
+      const { error: planErr } = await supabase.from('subscription_plans').upsert(
         {
           square_plan_id: obj.id,
           name: plan.name ?? '名称未設定',
@@ -76,7 +76,11 @@ export async function POST() {
         },
         { onConflict: 'square_plan_id' },
       );
-      result.plans++;
+      if (planErr) {
+        result.warnings.push(`[plans/${obj.id}] ${planErr.message}`);
+      } else {
+        result.plans++;
+      }
     }
   } catch (err) {
     result.warnings.push(describeSquareError(err, 'catalog'));
@@ -101,7 +105,7 @@ export async function POST() {
           [c.givenName, c.familyName].filter(Boolean).join(' ').trim() ||
           c.companyName ||
           '名前未設定';
-        await supabase.from('members').upsert(
+        const { error: memberErr } = await supabase.from('members').upsert(
           {
             square_customer_id: c.id!,
             source: 'square' as const,
@@ -110,10 +114,16 @@ export async function POST() {
             phone: c.phoneNumber ?? null,
             address: c.address?.addressLine1 ?? null,
             joined_at: c.createdAt ? c.createdAt.slice(0, 10) : null,
+            status: 'active' as const,
           },
           { onConflict: 'square_customer_id' },
         );
-        result.members++;
+        if (memberErr) {
+          result.warnings.push(`[members/${c.id?.slice(0, 8)}] ${memberErr.message}`);
+          console.error('member upsert failed', c.id, memberErr);
+        } else {
+          result.members++;
+        }
       }
       cursor = res.result.cursor;
     } while (cursor);
@@ -166,7 +176,7 @@ export async function POST() {
               planRowId = (plan as any)?.id ?? null;
             }
 
-            await supabase.from('member_subscriptions').upsert(
+            const { error: subErr } = await supabase.from('member_subscriptions').upsert(
               {
                 square_subscription_id: s.id!,
                 member_id: (member as any).id,
@@ -178,7 +188,12 @@ export async function POST() {
               },
               { onConflict: 'square_subscription_id' },
             );
-            result.subscriptions++;
+            if (subErr) {
+              result.warnings.push(`[sub/${s.id?.slice(0, 8)}] ${subErr.message}`);
+              console.error('subscription upsert failed', s.id, subErr);
+            } else {
+              result.subscriptions++;
+            }
           }
           subCursor = subRes.result.cursor;
         } while (subCursor);
