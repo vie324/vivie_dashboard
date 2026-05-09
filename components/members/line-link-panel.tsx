@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { Link2, Unlink, MessageCircle, Search, Save } from 'lucide-react';
+import { Link2, Unlink, MessageCircle, Search, Save, MessagesSquare } from 'lucide-react';
+import NextLink from 'next/link';
 import { formatDateTime } from '@/lib/utils';
 
 interface LineEvent {
@@ -119,22 +120,30 @@ export function LineLinkPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         {currentLineUserId ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Badge tone="green" className="mb-1">連携済み</Badge>
-                <p className="text-sm font-medium">
-                  {currentLineDisplayName ?? '(LINE 表示名なし)'}
-                </p>
-                <p className="text-xs text-ink-400 font-mono mt-0.5 break-all">
-                  {currentLineUserId}
-                </p>
+          <div className="space-y-2">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Badge tone="green" className="mb-1">連携済み</Badge>
+                  <p className="text-sm font-medium">
+                    {currentLineDisplayName ?? '(LINE 表示名なし)'}
+                  </p>
+                  <p className="text-xs text-ink-400 font-mono mt-0.5 break-all">
+                    {currentLineUserId}
+                  </p>
+                </div>
+                <Button onClick={unlink} variant="ghost" size="sm" disabled={submitting}>
+                  <Unlink size={14} />
+                  解除
+                </Button>
               </div>
-              <Button onClick={unlink} variant="ghost" size="sm" disabled={submitting}>
-                <Unlink size={14} />
-                解除
-              </Button>
             </div>
+            <NextLink href={`/messages/${encodeURIComponent(currentLineUserId)}`}>
+              <Button variant="primary" size="md" className="w-full">
+                <MessagesSquare size={14} />
+                LINE で会話する
+              </Button>
+            </NextLink>
           </div>
         ) : (
           <>
