@@ -2,6 +2,21 @@ import { NextResponse } from 'next/server';
 import { squareClient, squareLocationIds, safeJson } from '@/lib/square/client';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 
+// Square SDK のエラーから人間に分かりやすいメッセージを抽出
+function describeSquareError(err: unknown, step: string): string {
+  const e = err as any;
+  if (e?.errors && Array.isArray(e.errors) && e.errors.length > 0) {
+    const first = e.errors[0];
+    return `[${step}] ${first.category ?? ''} ${first.code ?? ''}: ${first.detail ?? first.message ?? ''}`;
+  }
+  if (e?.result?.errors?.[0]) {
+    const first = e.result.errors[0];
+    return `[${step}] ${first.category ?? ''} ${first.code ?? ''}: ${first.detail ?? first.message ?? ''}`;
+  }
+  if (e?.message) return `[${step}] ${e.message}`;
+  return `[${step}] unknown error`;
+}
+
 // Square から顧客・サブスクリプションを取得して Supabase に upsert
 export async function POST() {
   const supabaseAuth = createClient();
@@ -12,15 +27,33 @@ export async function POST() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  let imported = 0;
-  let subsImported = 0;
-  let plansImported = 0;
+  if (!process.env.SQUARE_ACCESS_TOKEN) {
+    return NextResponse.json(
+      { error: 'SQUARE_ACCESS_TOKEN が未設定です。Vercel の環境変数を確認してください。' },
+      { status: 500 },
+    );
+  }
 
+  const result = {
+    members: 0,
+    subscriptions: 0,
+    plans: 0,
+    warnings: [] as string[],
+  };
+
+  let sq: ReturnType<typeof squareClient>;
   try {
-    const sq = squareClient();
-    const supabase = createServiceClient();
+    sq = squareClient();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'square client init failed' },
+      { status: 500 },
+    );
+  }
+  const supabase = createServiceClient();
 
-    // 1) Catalog: SUBSCRIPTION_PLAN を取得
+  // 1) Catalog: SUBSCRIPTION_PLAN を取得 (失敗しても致命的ではない)
+  try {
     const catalogRes = await sq.catalogApi.searchCatalogObjects({
       objectTypes: ['SUBSCRIPTION_PLAN'],
       limit: 100,
@@ -34,27 +67,33 @@ export async function POST() {
       const monthlyPrice = monthlyPhase?.recurringPriceMoney?.amount
         ? Number(monthlyPhase.recurringPriceMoney.amount)
         : 0;
-      await supabase
-        .from('subscription_plans')
-        .upsert(
-          {
-            square_plan_id: obj.id,
-            name: plan.name ?? '名称未設定',
-            monthly_price: monthlyPrice,
-            is_active: !obj.isDeleted,
-          },
-          { onConflict: 'square_plan_id' },
-        );
-      plansImported++;
+      await supabase.from('subscription_plans').upsert(
+        {
+          square_plan_id: obj.id,
+          name: plan.name ?? '名称未設定',
+          monthly_price: monthlyPrice,
+          is_active: !obj.isDeleted,
+        },
+        { onConflict: 'square_plan_id' },
+      );
+      result.plans++;
     }
+  } catch (err) {
+    result.warnings.push(describeSquareError(err, 'catalog'));
+    console.error('catalog sync failed', err);
+  }
 
-    // 2) Customers
+  // 2) Customers (これが失敗したら止める)
+  try {
     let cursor: string | undefined;
     do {
       const res = await sq.customersApi.listCustomers(cursor, 100, undefined, 'DESC');
       const customers = res.result.customers ?? [];
       for (const c of customers) {
-        const fullName = [c.givenName, c.familyName].filter(Boolean).join(' ').trim() || c.companyName || '名前未設定';
+        const fullName =
+          [c.givenName, c.familyName].filter(Boolean).join(' ').trim() ||
+          c.companyName ||
+          '名前未設定';
         await supabase.from('members').upsert(
           {
             square_customer_id: c.id!,
@@ -67,68 +106,81 @@ export async function POST() {
           },
           { onConflict: 'square_customer_id' },
         );
-        imported++;
+        result.members++;
       }
       cursor = res.result.cursor;
     } while (cursor);
-
-    // 3) Subscriptions (location 単位で検索)
-    const locations = squareLocationIds();
-    for (const locationId of locations) {
-      let subCursor: string | undefined;
-      do {
-        const subRes = await sq.subscriptionsApi.searchSubscriptions({
-          query: { filter: { locationIds: [locationId] } },
-          cursor: subCursor,
-          limit: 100,
-        });
-        const subs = subRes.result.subscriptions ?? [];
-        for (const s of subs) {
-          if (!s.customerId) continue;
-          const { data: member } = await supabase
-            .from('members')
-            .select('id')
-            .eq('square_customer_id', s.customerId)
-            .maybeSingle();
-          if (!member) continue;
-
-          let planRowId: string | null = null;
-          if (s.planVariationId || s.planId) {
-            const planSquareId = s.planVariationId || s.planId;
-            const { data: plan } = await supabase
-              .from('subscription_plans')
-              .select('id')
-              .eq('square_plan_id', planSquareId!)
-              .maybeSingle();
-            planRowId = plan?.id ?? null;
-          }
-
-          await supabase.from('member_subscriptions').upsert(
-            {
-              square_subscription_id: s.id!,
-              member_id: member.id,
-              plan_id: planRowId,
-              status: s.status ?? 'UNKNOWN',
-              started_at: s.startDate ?? null,
-              next_billing_at: s.chargedThroughDate ?? null,
-              cancelled_at: s.canceledDate ?? null,
-            },
-            { onConflict: 'square_subscription_id' },
-          );
-          subsImported++;
-        }
-        subCursor = subRes.result.cursor;
-      } while (subCursor);
-    }
-
-    return NextResponse.json(
-      safeJson({ ok: true, members: imported, subscriptions: subsImported, plans: plansImported }),
-    );
   } catch (err) {
-    console.error('square sync error', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'sync failed' },
+      {
+        error: describeSquareError(err, 'customers'),
+        partial: safeJson(result),
+        hint: 'Access Token / Environment (production/sandbox) を確認してください',
+      },
       { status: 500 },
     );
   }
+
+  // 3) Subscriptions (location 単位で検索)
+  const locations = squareLocationIds();
+  if (locations.length === 0) {
+    result.warnings.push(
+      '[subscriptions] SQUARE_LOCATION_IDS が未設定のためサブスク同期をスキップしました',
+    );
+  } else {
+    for (const locationId of locations) {
+      try {
+        let subCursor: string | undefined;
+        do {
+          const requestBody: any = {
+            query: { filter: { locationIds: [locationId] } },
+            limit: 100,
+          };
+          if (subCursor) requestBody.cursor = subCursor;
+          const subRes = await sq.subscriptionsApi.searchSubscriptions(requestBody);
+          const subs = subRes.result.subscriptions ?? [];
+          for (const s of subs) {
+            if (!s.customerId) continue;
+            const { data: member } = await supabase
+              .from('members')
+              .select('id')
+              .eq('square_customer_id', s.customerId)
+              .maybeSingle();
+            if (!member) continue;
+
+            let planRowId: string | null = null;
+            const planSquareId = s.planVariationId || s.planId;
+            if (planSquareId) {
+              const { data: plan } = await supabase
+                .from('subscription_plans')
+                .select('id')
+                .eq('square_plan_id', planSquareId)
+                .maybeSingle();
+              planRowId = (plan as any)?.id ?? null;
+            }
+
+            await supabase.from('member_subscriptions').upsert(
+              {
+                square_subscription_id: s.id!,
+                member_id: (member as any).id,
+                plan_id: planRowId,
+                status: s.status ?? 'UNKNOWN',
+                started_at: s.startDate ?? null,
+                next_billing_at: s.chargedThroughDate ?? null,
+                cancelled_at: s.canceledDate ?? null,
+              },
+              { onConflict: 'square_subscription_id' },
+            );
+            result.subscriptions++;
+          }
+          subCursor = subRes.result.cursor;
+        } while (subCursor);
+      } catch (err) {
+        result.warnings.push(describeSquareError(err, `subscriptions/${locationId}`));
+        console.error('subscription sync failed for', locationId, err);
+      }
+    }
+  }
+
+  return NextResponse.json(safeJson({ ok: true, ...result }));
 }

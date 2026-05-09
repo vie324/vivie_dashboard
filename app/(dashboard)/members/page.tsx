@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { MembersTable } from '@/components/members/members-table';
+import { SquareSyncButton } from '@/components/members/sync-button';
 import { Button } from '@/components/ui/button';
-import { Plus, RefreshCcw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -22,12 +23,7 @@ export default async function MembersPage() {
         description="Square 連携会員と手動登録会員を統合管理します"
         actions={
           <>
-            <form action="/api/square/sync" method="post">
-              <Button type="submit" variant="secondary" size="sm">
-                <RefreshCcw size={14} />
-                Square 同期
-              </Button>
-            </form>
+            <SquareSyncButton />
             <Link href="/members/new">
               <Button size="sm">
                 <Plus size={14} />
