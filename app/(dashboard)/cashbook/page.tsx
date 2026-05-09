@@ -26,7 +26,8 @@ export default async function CashbookPage({
       .limit(1000),
   ]);
 
-  const storeId = searchParams.store ?? stores?.[0]?.id ?? '';
+  const storeList = (stores ?? []) as { id: string; name: string }[];
+  const storeId = searchParams.store ?? storeList[0]?.id ?? '';
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -35,7 +36,7 @@ export default async function CashbookPage({
         description="店舗ごとの収支を管理。Square 連携の入金は自動で記録されます"
       />
       <CashbookView
-        stores={stores ?? []}
+        stores={storeList}
         initialEntries={(entries ?? []) as any}
         initialMonth={month}
         initialStoreId={storeId}
