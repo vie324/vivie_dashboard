@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,8 +8,16 @@ import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
-import { Plus, Trash2, ArrowDownCircle, ArrowUpCircle, Wallet, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, ArrowDownCircle, ArrowUpCircle, Wallet, Loader2, X, Download } from 'lucide-react';
 import { cn, formatYen, formatDate, todayISO } from '@/lib/utils';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip as ReTooltip,
+  Legend,
+} from 'recharts';
 import type { CashbookEntry, CashbookSource, CashbookType } from '@/types/database';
 
 interface EntryWithMeta extends CashbookEntry {
@@ -37,6 +45,8 @@ const typeLabel: Record<CashbookType, string> = {
   adjustment: '調整',
 };
 
+const PIE_COLORS = ['#DCA9A8', '#F59E0B', '#10B981', '#0EA5E9', '#8B5CF6', '#EC4899', '#F97316', '#94A3B8'];
+
 export function CashbookView({ stores, initialEntries, initialMonth, initialStoreId }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -44,6 +54,17 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
   const [storeId, setStoreId] = useState(initialStoreId);
   const [entries, setEntries] = useState(initialEntries);
   const [showForm, setShowForm] = useState(false);
+  const [categories, setCategories] = useState<{ name: string; entry_type: string }[]>([]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from('cashbook_categories')
+      .select('name, entry_type, display_order')
+      .eq('is_active', true)
+      .order('display_order')
+      .then(({ data }) => setCategories((data as any) ?? []));
+  }, []);
 
   const filtered = useMemo(
     () => entries.filter((e) => !storeId || e.store_id === storeId),
@@ -54,6 +75,21 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
     const income = filtered.filter((e) => e.entry_type === 'income').reduce((s, e) => s + e.amount, 0);
     const expense = filtered.filter((e) => e.entry_type === 'expense').reduce((s, e) => s + e.amount, 0);
     return { income, expense, balance: income - expense };
+  }, [filtered]);
+
+  // カテゴリ別の集計 (グラフ用)
+  const categoryBreakdown = useMemo(() => {
+    const incomeMap = new Map<string, number>();
+    const expenseMap = new Map<string, number>();
+    filtered.forEach((e) => {
+      const map = e.entry_type === 'income' ? incomeMap : e.entry_type === 'expense' ? expenseMap : null;
+      if (!map) return;
+      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    });
+    return {
+      income: Array.from(incomeMap.entries()).map(([name, value]) => ({ name, value })),
+      expense: Array.from(expenseMap.entries()).map(([name, value]) => ({ name, value })),
+    };
   }, [filtered]);
 
   function applyFilter(nextMonth: string, nextStore: string) {
@@ -73,6 +109,28 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
     }
     setEntries((list) => list.filter((e) => e.id !== id));
     toast.show('削除しました', 'success');
+  }
+
+  function exportCsv() {
+    const headers = ['日付', '区分', 'カテゴリ', '支払方法', '金額', '説明'];
+    const rows = filtered.map((e) => [
+      e.entry_date,
+      typeLabel[e.entry_type],
+      e.category,
+      sourceLabel[e.source],
+      e.amount.toString(),
+      (e.description ?? '').replace(/[\r\n,]/g, ' '),
+    ]);
+    const csv =
+      '﻿' +
+      [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cashbook-${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -106,10 +164,16 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
             </Select>
           </Field>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus size={14} />
-          記入する
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="md" onClick={exportCsv}>
+            <Download size={14} />
+            CSV
+          </Button>
+          <Button onClick={() => setShowForm(true)}>
+            <Plus size={14} />
+            記入する
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -118,9 +182,22 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
         <SummaryCard label="差引" value={totals.balance} icon={<Wallet size={18} />} tone="rose" />
       </div>
 
+      {/* カテゴリ別グラフ */}
+      {(categoryBreakdown.income.length > 0 || categoryBreakdown.expense.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {categoryBreakdown.income.length > 0 && (
+            <ChartCard title="入金カテゴリ別" data={categoryBreakdown.income} />
+          )}
+          {categoryBreakdown.expense.length > 0 && (
+            <ChartCard title="出金カテゴリ別" data={categoryBreakdown.expense} />
+          )}
+        </div>
+      )}
+
       {showForm && (
         <CashbookEntryForm
           stores={stores}
+          categories={categories}
           defaultStoreId={storeId || stores[0]?.id || ''}
           onClose={() => setShowForm(false)}
           onCreated={(entry) => {
@@ -192,6 +269,29 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
   );
 }
 
+function ChartCard({ title, data }: { title: string; data: { name: string; value: number }[] }) {
+  return (
+    <Card>
+      <CardContent>
+        <p className="text-sm font-medium mb-2">{title}</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" outerRadius={70} label={(d) => d.name}>
+              {data.map((_, i) => (
+                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <ReTooltip
+              formatter={(v: number) => formatYen(v)}
+              contentStyle={{ fontSize: 12, borderRadius: 12 }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SummaryCard({
   label,
   value,
@@ -223,11 +323,13 @@ function SummaryCard({
 
 function CashbookEntryForm({
   stores,
+  categories,
   defaultStoreId,
   onClose,
   onCreated,
 }: {
   stores: { id: string; name: string }[];
+  categories: { name: string; entry_type: string }[];
   defaultStoreId: string;
   onClose: () => void;
   onCreated: (entry: any) => void;
@@ -243,6 +345,10 @@ function CashbookEntryForm({
     amount: '',
     description: '',
   });
+
+  const availableCategories = categories.filter(
+    (c) => c.entry_type === form.entry_type || c.entry_type === 'both',
+  );
 
   function update<K extends keyof typeof form>(key: K, value: typeof form[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -341,12 +447,18 @@ function CashbookEntryForm({
                 <option value="other">その他</option>
               </Select>
             </Field>
-            <Field label="カテゴリ" hint="例: 施術売上 / 物販 / 仕入れ / 家賃">
+            <Field label="カテゴリ" hint="マスタから選択 / 直接入力も可">
               <Input
+                list="cashbook-categories"
                 value={form.category}
                 onChange={(e) => update('category', e.target.value)}
-                placeholder={form.entry_type === 'income' ? '売上' : '経費'}
+                placeholder={form.entry_type === 'income' ? '施術売上' : '仕入れ'}
               />
+              <datalist id="cashbook-categories">
+                {availableCategories.map((c) => (
+                  <option key={c.name} value={c.name} />
+                ))}
+              </datalist>
             </Field>
             <Field label="金額 (円)" required>
               <Input

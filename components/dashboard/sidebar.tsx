@@ -16,26 +16,56 @@ import {
   Activity,
   ShieldCheck,
   MessageCircle,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import type { Staff } from '@/types/database';
 
-const baseItems = [
-  { href: '/', label: 'ダッシュボード', icon: LayoutDashboard },
-  { href: '/members', label: '会員管理', icon: Users },
-  { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true },
-  { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
-  { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
-  { href: '/treatments', label: '施術レポート', icon: Activity },
-  { href: '/cashbook', label: '出納帳', icon: Wallet },
-  { href: '/reports', label: '日報', icon: FileBarChart2 },
-  { href: '/attendance', label: '勤怠', icon: MapPin },
-];
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  showBadge?: boolean;
+}
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+  adminOnly?: boolean;
+}
 
-const adminItems = [
-  { href: '/admin', label: '管理コンソール', icon: ShieldCheck },
-  { href: '/settings', label: '設定', icon: Settings },
+const navGroups: NavGroup[] = [
+  {
+    label: '概要',
+    items: [{ href: '/', label: 'ダッシュボード', icon: LayoutDashboard }],
+  },
+  {
+    label: '顧客',
+    items: [
+      { href: '/members', label: '会員管理', icon: Users },
+      { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true },
+      { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
+      { href: '/treatments', label: '施術レポート', icon: Activity },
+    ],
+  },
+  {
+    label: '売上 / 運営',
+    items: [
+      { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
+      { href: '/cashbook', label: '出納帳', icon: Wallet },
+      { href: '/reports', label: '日報', icon: FileBarChart2 },
+      { href: '/attendance', label: '勤怠', icon: MapPin },
+    ],
+  },
+  {
+    label: '管理',
+    adminOnly: true,
+    items: [
+      { href: '/admin', label: '管理コンソール', icon: ShieldCheck },
+      { href: '/settings', label: '設定', icon: Settings },
+    ],
+  },
 ];
 
 export function Sidebar({
@@ -48,8 +78,23 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const items = [...baseItems, ...(staff.role !== 'staff' ? adminItems : [])];
   const [unread, setUnread] = useState<number>(0);
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    // ダークモード初期化
+    const saved = localStorage.getItem('vivie-theme');
+    const isDark = saved === 'dark';
+    setDark(isDark);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, []);
+
+  function toggleDark() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('vivie-theme', next ? 'dark' : 'light');
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -77,6 +122,8 @@ export function Sidebar({
     };
   }, []);
 
+  const visibleGroups = navGroups.filter((g) => !g.adminOnly || staff.role !== 'staff');
+
   return (
     <>
       {open && (
@@ -88,11 +135,11 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex items-center justify-between px-5 py-5">
+        <div className="flex items-center justify-between px-5 py-5 shrink-0">
           <Link href="/" className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-vivie-100 text-vivie-600">
               <Sparkles size={18} />
@@ -108,40 +155,58 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav className="px-3 pb-4">
-          <ul className="space-y-0.5">
-            {items.map((item) => {
-              const active =
-                item.href === '/'
-                  ? pathname === '/'
-                  : pathname.startsWith(item.href);
-              const Icon = item.icon;
-              const showBadge = (item as any).showBadge && unread > 0;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onClose}
-                    className={cn(
-                      'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
-                      active
-                        ? 'bg-vivie-50 text-vivie-700 font-medium'
-                        : 'text-ink-700 hover:bg-ink-50',
-                    )}
-                  >
-                    <Icon size={18} className={active ? 'text-vivie-500' : 'text-ink-500'} />
-                    <span className="flex-1">{item.label}</span>
-                    {showBadge && (
-                      <span className="inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full bg-vivie-500 px-1.5 text-xs font-medium text-white">
-                        {unread > 99 ? '99+' : unread}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-4">
+          {visibleGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-400">
+                {group.label}
+              </p>
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active =
+                    item.href === '/'
+                      ? pathname === '/'
+                      : pathname.startsWith(item.href);
+                  const Icon = item.icon;
+                  const showBadge = item.showBadge && unread > 0;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        className={cn(
+                          'flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors',
+                          active
+                            ? 'bg-vivie-50 text-vivie-700 font-medium'
+                            : 'text-ink-700 hover:bg-ink-50',
+                        )}
+                      >
+                        <Icon size={16} className={active ? 'text-vivie-500' : 'text-ink-500'} />
+                        <span className="flex-1">{item.label}</span>
+                        {showBadge && (
+                          <span className="inline-flex min-w-[1.125rem] h-[1.125rem] items-center justify-center rounded-full bg-vivie-500 px-1 text-[10px] font-medium text-white">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
+
+        <div className="border-t border-ink-100 px-3 py-3 shrink-0">
+          <button
+            onClick={toggleDark}
+            className="flex items-center gap-2 w-full rounded-xl px-3 py-2 text-xs text-ink-500 hover:bg-ink-50"
+            aria-label="テーマ切替"
+          >
+            {dark ? <Sun size={14} /> : <Moon size={14} />}
+            <span>{dark ? 'ライトモード' : 'ダークモード'}</span>
+          </button>
+        </div>
       </aside>
     </>
   );

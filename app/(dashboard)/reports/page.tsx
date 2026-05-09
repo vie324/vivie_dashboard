@@ -146,7 +146,11 @@ export default async function ReportsPage() {
                       : 0;
                     return (
                       <tr key={r.id}>
-                        <td className="whitespace-nowrap text-xs text-ink-500">{formatDate(r.report_date)}</td>
+                        <td className="whitespace-nowrap text-xs text-ink-500">
+                          <Link href={`/reports/${r.id}`} className="hover:text-vivie-600">
+                            {formatDate(r.report_date)}
+                          </Link>
+                        </td>
                         <td className="text-sm">{r.staff?.display_name ?? '—'}</td>
                         <td className="text-xs text-ink-500">{r.store?.name ?? '—'}</td>
                         <td className="text-right text-sm">{r.existing_treatment_count}</td>
