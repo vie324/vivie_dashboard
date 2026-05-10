@@ -50,6 +50,7 @@ interface Props {
     pubsub_token_set: boolean;
     app_url: string | null;
     pubsub_topic: string | null;
+    pubsub_token: string | null;
   };
 }
 
@@ -60,9 +61,12 @@ export function GmailSettingsView({ settings, emails, config }: Props) {
   const [testForm, setTestForm] = useState({ sender: '', subject: '', body: '' });
   const [testResult, setTestResult] = useState<any>(null);
 
+  const tokenForUrl = config.pubsub_token
+    ? encodeURIComponent(config.pubsub_token)
+    : 'YOUR_TOKEN';
   const watchUrl = config.app_url
-    ? `${config.app_url}/api/inbound/gmail?token=YOUR_TOKEN`
-    : '/api/inbound/gmail?token=YOUR_TOKEN';
+    ? `${config.app_url}/api/inbound/gmail?token=${tokenForUrl}`
+    : `/api/inbound/gmail?token=${tokenForUrl}`;
   const oauthStartUrl = '/api/gmail/oauth/start';
 
   const watchActive =
@@ -225,7 +229,9 @@ export function GmailSettingsView({ settings, emails, config }: Props) {
               <CopyButton value={watchUrl} />
             </div>
             <p className="mt-1 text-[10px] text-ink-400">
-              YOUR_TOKEN は GMAIL_PUBSUB_VERIFICATION_TOKEN の値に置換
+              {config.pubsub_token
+                ? 'この URL をそのまま Pub/Sub Subscription の Push エンドポイントに登録してください'
+                : 'GMAIL_PUBSUB_VERIFICATION_TOKEN を設定すると、URL に実トークンが埋め込まれます'}
             </p>
           </div>
         </CardContent>
