@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentStaff } from '@/lib/auth';
@@ -6,6 +7,7 @@ import { StoreSettings } from '@/components/settings/store-settings';
 import { StaffSettings } from '@/components/settings/staff-settings';
 import { StaffInviteForm } from '@/components/settings/staff-invite-form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,8 +57,25 @@ export default async function SettingsPage() {
       </Card>
 
       <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>Gmail 連携 (予約自動取り込み)</CardTitle>
+          <Link href="/settings/gmail">
+            <Button size="sm" variant="secondary">
+              詳細設定 →
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-600">
+            HPB / minimo の予約通知メールを Gmail Pub/Sub プッシュで自動取り込み。
+            平均 5–30 秒の遅延で <code>reservations</code> テーブルに自動登録されます。
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
-          <CardTitle>外部連携</CardTitle>
+          <CardTitle>外部連携 (環境変数)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <Row label="Supabase URL" value={process.env.NEXT_PUBLIC_SUPABASE_URL ? '✓ 設定済' : '未設定'} />
