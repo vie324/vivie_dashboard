@@ -33,6 +33,7 @@ export default async function GmailSettingsPage() {
     pubsub_token_set: !!process.env.GMAIL_PUBSUB_VERIFICATION_TOKEN,
     app_url: process.env.NEXT_PUBLIC_APP_URL ?? null,
     pubsub_topic: process.env.GMAIL_PUBSUB_TOPIC ?? null,
+    pubsub_token: process.env.GMAIL_PUBSUB_VERIFICATION_TOKEN ?? null,
   };
 
   return (

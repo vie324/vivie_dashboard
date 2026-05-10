@@ -11,6 +11,29 @@ export async function POST(request: NextRequest) {
   const token = url.searchParams.get('token');
   const expected = process.env.GMAIL_PUBSUB_VERIFICATION_TOKEN;
   if (expected && token !== expected) {
+    const ua = request.headers.get('user-agent') ?? '';
+    const fromGoogle = ua.includes('APIs-Google') || ua.includes('Google-Cloud-PubSub');
+    console.warn('[gmail webhook] token mismatch', {
+      received_len: token?.length ?? 0,
+      expected_len: expected.length,
+      ua: ua.slice(0, 120),
+      from_google: fromGoogle,
+    });
+    // Pub/Sub から到達しているのに弾いている場合は、設定画面で原因が見えるよう last_error に残す
+    if (fromGoogle) {
+      try {
+        const supabase = createServiceClient();
+        await supabase
+          .from('gmail_integration_settings')
+          .update({
+            last_error:
+              'Pub/Sub Push の token が一致しません。Subscription の Push URL に登録した ?token=... の値が、サーバの GMAIL_PUBSUB_VERIFICATION_TOKEN と異なります。',
+          })
+          .eq('id', 'default');
+      } catch (e) {
+        console.error('[gmail webhook] failed to persist token-mismatch error', e);
+      }
+    }
     return NextResponse.json({ error: 'invalid token' }, { status: 401 });
   }
 
