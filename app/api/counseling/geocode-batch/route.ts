@@ -24,12 +24,18 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const limit = Math.min(Number(body.limit) || 20, 50);
+  const retryFailed = body.retry_failed ?? true;
 
-  const { data: targets } = await supabase
+  // 未試行を優先、次に失敗済 (retry_failed=true の場合)
+  const query = supabase
     .from('counseling_records')
     .select('id, address')
     .not('address', 'is', null)
-    .is('geo_lat', null)
+    .is('geo_lat', null);
+  // retry_failed=false の場合は未試行のみ
+  if (!retryFailed) query.is('geo_attempted_at', null);
+  const { data: targets } = await query
+    .order('geo_attempted_at', { ascending: true, nullsFirst: true })
     .order('submitted_at', { ascending: false })
     .limit(limit);
 

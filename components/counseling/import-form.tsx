@@ -55,6 +55,12 @@ export function CounselingImportForm({ stores }: Props) {
         `${body.inserted} 件登録 (重複スキップ ${body.duplicates} 件)`,
         'success',
       );
+      if (body.inserted > 0) {
+        toast.show(
+          '住所のジオコーディングは /counseling/map から実行できます',
+          'info',
+        );
+      }
       setPreview(null);
       setTsv('');
       router.refresh();

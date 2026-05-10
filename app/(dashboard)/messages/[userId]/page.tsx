@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { MessageThread } from '@/components/messages/message-thread';
 import { ConversationMetaPanel } from '@/components/messages/conversation-meta-panel';
-import { ChevronLeft, User, Phone } from 'lucide-react';
+import { QuickLinkMember } from '@/components/messages/quick-link-member';
+import { ChevronLeft, Phone } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -130,16 +131,12 @@ export default async function ThreadPage({ params }: { params: { userId: string 
                   </Link>
                 </div>
               ) : (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700">
-                  <p className="font-medium mb-1">
-                    <User size={12} className="inline -mt-0.5 mr-1" />
-                    会員と紐付いていません
-                  </p>
-                  <p>
-                    会員管理から該当のお客様を開き、「公式 LINE 連携」でこの ID を選択するとひも付きます。
-                  </p>
-                  <p className="mt-2 font-mono text-[10px] truncate text-amber-600">{userId}</p>
-                </div>
+                <QuickLinkMember
+                  lineUserId={userId}
+                  initialDisplayName={
+                    (conv as any).line_display_name ?? (lastEvent as any)?.display_name ?? null
+                  }
+                />
               )}
             </CardContent>
           </Card>
