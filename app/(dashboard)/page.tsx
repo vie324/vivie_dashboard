@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar } from '@/components/ui/avatar';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
-import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange } from 'lucide-react';
+import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle } from 'lucide-react';
 import { formatYen, formatDate, todayISO } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
 
@@ -31,6 +31,7 @@ export default async function DashboardHome() {
     recentVisitsRes,
     recentTreatmentsRes,
     dailySalesRes,
+    expiringTicketsRes,
   ] = await Promise.all([
     supabase.from('members').select('id, status', { count: 'exact', head: false }),
     supabase
@@ -67,6 +68,15 @@ export default async function DashboardHome() {
       .gte('entry_date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
       .lte('entry_date', today)
       .eq('entry_type', 'income'),
+    // 期限切れ間近 (30日以内) の有効チケット
+    supabase
+      .from('ticket_overview')
+      .select('id, member_id, member_name, plan_name, remaining_count, total_count, expires_at, days_until_expiry')
+      .eq('effective_status', 'active')
+      .lte('days_until_expiry', 30)
+      .gte('days_until_expiry', 0)
+      .order('days_until_expiry', { ascending: true })
+      .limit(8),
   ]);
 
   const totalMembers = membersRes.count ?? 0;
@@ -137,6 +147,43 @@ export default async function DashboardHome() {
           />
         </div>
       </DashboardClient>
+
+      {(expiringTicketsRes.data ?? []).length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-900">
+              <AlertTriangle className="text-amber-600" size={18} />
+              30日以内に期限切れの回数券 ({(expiringTicketsRes.data ?? []).length}件)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-amber-200">
+              {(expiringTicketsRes.data ?? []).map((t: any) => (
+                <li key={t.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                  <Link
+                    href={`/members/${t.member_id}`}
+                    className="flex-1 font-medium hover:text-vivie-600"
+                  >
+                    {t.member_name ?? '—'}
+                  </Link>
+                  <span className="text-xs text-ink-600">{t.plan_name}</span>
+                  <span className="text-xs text-ink-500">
+                    残 {t.remaining_count}/{t.total_count}
+                  </span>
+                  <span className="text-xs font-medium text-amber-700">
+                    {formatDate(t.expires_at)} (あと {Math.max(0, t.days_until_expiry)}日)
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-amber-200 px-5 py-2 bg-amber-50/60">
+              <Link href="/tickets" className="text-xs text-vivie-700 hover:underline">
+                回数券一覧で詳細を確認 →
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

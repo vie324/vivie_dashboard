@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { LineLinkPanel } from '@/components/members/line-link-panel';
 import { TagPicker } from '@/components/members/tag-picker';
 import { MemberTimeline } from '@/components/members/timeline';
 import { ScoreHistoryChart } from '@/components/members/score-history-chart';
+import { MemberTicketsPanel } from '@/components/tickets/member-tickets-panel';
 import { Pencil, Activity } from 'lucide-react';
 import { formatDate, formatYen } from '@/lib/utils';
 import type { MemberStatus } from '@/types/database';
@@ -46,6 +48,9 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
     { data: tags },
     { data: stats },
     { data: messages },
+    { data: tickets },
+    { data: ticketPlans },
+    currentStaffData,
   ] = await Promise.all([
     supabase
       .from('member_subscriptions')
@@ -80,7 +85,16 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
       .eq('member_id', params.id)
       .order('sent_at', { ascending: false })
       .limit(20),
+    supabase
+      .from('ticket_overview')
+      .select('*')
+      .eq('member_id', params.id)
+      .order('purchased_at', { ascending: false }),
+    supabase.from('ticket_plans').select('*').eq('is_active', true).order('display_order'),
+    getCurrentStaff(),
   ]);
+  const currentStaff = currentStaffData;
+  const isManager = currentStaff?.role === 'admin' || currentStaff?.role === 'manager';
 
   const tagIds = (tags ?? []).map((t: any) => t.tag_id);
   const m: any = member;
@@ -252,6 +266,14 @@ export default async function MemberDetailPage({ params }: { params: { id: strin
           <MemberTimeline events={timelineEvents} />
         </CardContent>
       </Card>
+
+      <MemberTicketsPanel
+        memberId={member.id}
+        storeId={member.primary_store_id ?? null}
+        tickets={(tickets ?? []) as any}
+        plans={(ticketPlans ?? []) as any}
+        isManager={isManager}
+      />
 
       <LineLinkPanel
         memberId={member.id}
