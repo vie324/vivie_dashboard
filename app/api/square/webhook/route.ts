@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     } else if (type?.startsWith('customer.')) {
       const c = event.data?.object?.customer;
       if (c) {
-        const fullName = [c.given_name, c.family_name].filter(Boolean).join(' ').trim() || c.company_name || '名前未設定';
+        const fullName = [c.family_name, c.given_name].filter(Boolean).join(' ').trim() || c.company_name || '名前未設定';
         await supabase.from('members').upsert(
           {
             square_customer_id: c.id,

@@ -2,10 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/input';
+import { Textarea, Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { TemplatePicker } from './template-picker';
-import { Send, Loader2, Sparkles } from 'lucide-react';
+import { Send, Loader2, Sparkles, Search, X as XIcon } from 'lucide-react';
 import { cn, formatDateTime } from '@/lib/utils';
 
 interface Message {
@@ -37,7 +37,15 @@ export function MessageThread({
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const filteredMessages = (() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((m) => (m.message_text ?? '').toLowerCase().includes(q));
+  })();
 
   // 既読化 (初回 + メッセージ受信時)
   useEffect(() => {
@@ -132,16 +140,44 @@ export function MessageThread({
           <p className="font-medium text-ink-900 truncate">{conversationName}</p>
           <p className="text-xs text-ink-400">公式 LINE</p>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSearchOpen(!searchOpen);
+            if (searchOpen) setSearchQuery('');
+          }}
+          className="rounded-lg p-2 text-ink-500 hover:bg-vivie-50 hover:text-vivie-600"
+          aria-label="メッセージ検索"
+        >
+          {searchOpen ? <XIcon size={16} /> : <Search size={16} />}
+        </button>
       </div>
+      {searchOpen && (
+        <div className="border-b border-ink-100 px-4 py-2">
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="メッセージ内を検索"
+            autoFocus
+          />
+          {searchQuery && (
+            <p className="mt-1 text-xs text-ink-500">
+              {filteredMessages.length} 件のメッセージにヒット
+            </p>
+          )}
+        </div>
+      )}
 
       {/* スレッド */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-ink-50/40">
-        {messages.length === 0 ? (
+        {filteredMessages.length === 0 ? (
           <p className="text-center text-sm text-ink-400 py-12">
-            まだメッセージがありません。下から送信してください。
+            {searchQuery ? '該当するメッセージがありません' : 'まだメッセージがありません。下から送信してください。'}
           </p>
         ) : (
-          messages.map((m, i) => <MessageBubble key={m.id} m={m} prev={messages[i - 1] ?? null} />)
+          filteredMessages.map((m, i) => (
+            <MessageBubble key={m.id} m={m} prev={filteredMessages[i - 1] ?? null} highlight={searchQuery} />
+          ))
         )}
       </div>
 
@@ -172,7 +208,36 @@ export function MessageThread({
   );
 }
 
-function MessageBubble({ m, prev }: { m: Message; prev: Message | null }) {
+function highlightText(text: string, query?: string): React.ReactNode {
+  if (!query?.trim()) return text;
+  const q = query.trim();
+  const lowerText = text.toLowerCase();
+  const lowerQuery = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let i = 0;
+  while ((i = lowerText.indexOf(lowerQuery, lastIndex)) !== -1) {
+    if (i > lastIndex) parts.push(text.slice(lastIndex, i));
+    parts.push(
+      <mark key={i} className="bg-amber-200 text-ink-900 rounded">
+        {text.slice(i, i + q.length)}
+      </mark>,
+    );
+    lastIndex = i + q.length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function MessageBubble({
+  m,
+  prev,
+  highlight,
+}: {
+  m: Message;
+  prev: Message | null;
+  highlight?: string;
+}) {
   const showTime =
     !prev ||
     new Date(m.sent_at).getTime() - new Date(prev.sent_at).getTime() > 5 * 60 * 1000;
@@ -203,11 +268,11 @@ function MessageBubble({ m, prev }: { m: Message; prev: Message | null }) {
             className={cn(
               'inline-block rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap break-words text-left',
               isOutbound
-                ? 'bg-vivie-400 text-white rounded-br-md'
+                ? 'bg-vivie-300 text-white rounded-br-md'
                 : 'bg-white border border-ink-100 text-ink-900 rounded-bl-md',
             )}
           >
-            {m.message_text ?? `(${m.message_type})`}
+            {highlightText(m.message_text ?? `(${m.message_type})`, highlight)}
           </div>
           {isOutbound && m.sent_by_staff && (
             <p className="mt-0.5 text-[10px] text-ink-400 mr-1">

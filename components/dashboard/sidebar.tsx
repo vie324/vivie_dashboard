@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Moon,
   Sun,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -55,6 +56,7 @@ const navGroups: NavGroup[] = [
       { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
       { href: '/cashbook', label: '出納帳', icon: Wallet },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
+      { href: '/goals', label: '目標管理', icon: Target },
       { href: '/attendance', label: '勤怠', icon: MapPin },
     ],
   },

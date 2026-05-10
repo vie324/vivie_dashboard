@@ -32,6 +32,8 @@ export async function POST(
     'hpb_contract_count',
     'meta_new_count',
     'meta_contract_count',
+    'minimo_new_count',
+    'minimo_contract_count',
     'referral_new_count',
     'referral_contract_count',
     'existing_treatment_count',

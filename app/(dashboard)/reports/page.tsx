@@ -140,7 +140,7 @@ export default async function ReportsPage() {
                 </thead>
                 <tbody>
                   {(reports ?? []).map((r: any) => {
-                    const newCount = r.hpb_new_count + r.meta_new_count + r.referral_new_count;
+                    const newCount = r.hpb_new_count + r.meta_new_count + (r.minimo_new_count ?? 0) + r.referral_new_count;
                     const rate = r.existing_treatment_count > 0
                       ? Math.round((r.repeat_count / r.existing_treatment_count) * 100)
                       : 0;
