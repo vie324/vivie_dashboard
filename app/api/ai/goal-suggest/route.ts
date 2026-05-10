@@ -37,22 +37,45 @@ export async function POST(request: NextRequest) {
     })();
 
   // 過去 6 か月の日報を取得
+  // minimo カラムは migration 9 で追加された後発カラム。未マイグレーション環境でも
+  // 動作するよう、まず minimo 込みで試して、失敗したら minimo を除外して再試行する
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const fromDate = sixMonthsAgo.toISOString().slice(0, 10);
 
-  const reportQuery = supabase
-    .from('daily_reports')
-    .select(
-      'report_date, hpb_new_count, hpb_contract_count, meta_new_count, meta_contract_count, minimo_new_count, minimo_contract_count, referral_new_count, referral_contract_count, existing_treatment_count, repeat_count, total_sales, discount_total, store:stores(name)',
-    )
-    .gte('report_date', fromDate)
-    .order('report_date');
+  const baseColumns =
+    'report_date, hpb_new_count, hpb_contract_count, meta_new_count, meta_contract_count, referral_new_count, referral_contract_count, existing_treatment_count, repeat_count, total_sales, discount_total, store:stores(name)';
+  const withMinimoColumns = baseColumns + ', minimo_new_count, minimo_contract_count';
 
-  if (body.store_id) reportQuery.eq('store_id', body.store_id);
+  async function fetchReports(columns: string) {
+    const q = supabase
+      .from('daily_reports')
+      .select(columns)
+      .gte('report_date', fromDate)
+      .order('report_date');
+    if (body.store_id) q.eq('store_id', body.store_id);
+    return q;
+  }
 
-  const { data: reports, error } = await reportQuery;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let { data: reports, error } = await fetchReports(withMinimoColumns);
+  let minimoSupported = !error;
+  if (error) {
+    // minimo カラム未マイグレーションの可能性 → 除外して再試行
+    const fallback = await fetchReports(baseColumns);
+    reports = fallback.data;
+    error = fallback.error;
+    minimoSupported = false;
+  }
+
+  if (error) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        hint: 'マイグレーション 20260509000009_line_meta_minimo_goals.sql を実行してください',
+      },
+      { status: 500 },
+    );
+  }
   if (!reports || reports.length === 0) {
     return NextResponse.json(
       { error: '日報データが過去 6 か月にありません。最低 1 か月分の日報を入力してから再度お試しください。' },
@@ -86,8 +109,10 @@ export async function POST(request: NextRequest) {
     cur.hpb_contract += r.hpb_contract_count;
     cur.meta_new += r.meta_new_count;
     cur.meta_contract += r.meta_contract_count;
-    cur.minimo_new += r.minimo_new_count ?? 0;
-    cur.minimo_contract += r.minimo_contract_count ?? 0;
+    if (minimoSupported) {
+      cur.minimo_new += r.minimo_new_count ?? 0;
+      cur.minimo_contract += r.minimo_contract_count ?? 0;
+    }
     cur.referral_new += r.referral_new_count;
     cur.referral_contract += r.referral_contract_count;
     cur.existing += r.existing_treatment_count;

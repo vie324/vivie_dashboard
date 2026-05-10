@@ -42,11 +42,22 @@ interface UnresolvedRow {
 interface Props {
   points: MapPoint[];
   unresolvedCount: number;
+  untriedCount?: number;
+  failedCount?: number;
+  addressedTotal?: number;
   unresolvedSamples?: UnresolvedRow[];
   failedSamples?: UnresolvedRow[];
 }
 
-export function CounselingMapView({ points, unresolvedCount, unresolvedSamples = [], failedSamples = [] }: Props) {
+export function CounselingMapView({
+  points,
+  unresolvedCount,
+  untriedCount = 0,
+  failedCount = 0,
+  addressedTotal = 0,
+  unresolvedSamples = [],
+  failedSamples = [],
+}: Props) {
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -125,8 +136,47 @@ export function CounselingMapView({ points, unresolvedCount, unresolvedSamples =
     }
   }
 
+  const resolvedCount = points.length;
+  const unresolvedActual = Math.max(0, addressedTotal - resolvedCount);
+
   return (
     <div className="space-y-4">
+      {/* ステータスサマリ + ジオコード処理 */}
+      <Card className="border-vivie-200">
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
+              <Stat label="住所あり" value={addressedTotal} />
+              <Stat label="解決済 (地図表示)" value={resolvedCount} tone="green" />
+              <Stat label="未試行" value={untriedCount} tone="amber" />
+              <Stat label="失敗 (リトライ可)" value={failedCount} tone="red" />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3">
+            <p className="text-xs text-ink-500 mr-auto">
+              未解決の住所を緯度経度に変換します (1 件あたり約 1 秒)
+            </p>
+            <Button
+              onClick={() => runBatch(20)}
+              disabled={running || unresolvedActual === 0}
+              variant="secondary"
+              size="sm"
+            >
+              {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              20 件処理
+            </Button>
+            <Button
+              onClick={() => runBatch(50)}
+              disabled={running || unresolvedActual === 0}
+              size="sm"
+            >
+              {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              最大 (50 件) 処理
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* フィルタ + 集計 */}
       <Card>
         <CardContent className="space-y-3">
@@ -153,18 +203,6 @@ export function CounselingMapView({ points, unresolvedCount, unresolvedSamples =
                 </Select>
               </Field>
             </div>
-            {unresolvedCount > 0 && (
-              <div className="flex gap-2">
-                <Button onClick={() => runBatch(20)} disabled={running} variant="secondary" size="sm">
-                  {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  20 件処理
-                </Button>
-                <Button onClick={() => runBatch(50)} disabled={running} size="sm">
-                  {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  最大 (50 件)
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* 凡例 */}
@@ -323,6 +361,29 @@ export function CounselingMapView({ points, unresolvedCount, unresolvedSamples =
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  tone?: 'default' | 'green' | 'amber' | 'red';
+}) {
+  const toneClass = {
+    default: 'text-ink-900',
+    green: 'text-emerald-700',
+    amber: 'text-amber-700',
+    red: 'text-red-700',
+  };
+  return (
+    <div className="rounded-xl bg-ink-50/40 border border-ink-100 px-3 py-2">
+      <p className="text-[10px] text-ink-500">{label}</p>
+      <p className={`mt-0.5 font-serif text-xl font-semibold ${toneClass[tone]}`}>{value}</p>
     </div>
   );
 }

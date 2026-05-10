@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea, Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { TemplatePicker } from './template-picker';
-import { Send, Loader2, Sparkles, Search, X as XIcon } from 'lucide-react';
+import { Send, Loader2, Sparkles, Search, X as XIcon, Check, CheckCheck } from 'lucide-react';
 import { cn, formatDateTime } from '@/lib/utils';
 
 interface Message {
@@ -47,14 +47,34 @@ export function MessageThread({
     return messages.filter((m) => (m.message_text ?? '').toLowerCase().includes(q));
   })();
 
-  // 既読化 (初回 + メッセージ受信時)
-  useEffect(() => {
-    fetch('/api/line/mark-read', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ line_user_id: lineUserId }),
-    });
-  }, [lineUserId, messages.length]);
+  // 未読数 (inbound + read_at が NULL のもの)
+  const unreadCount = messages.filter(
+    (m) => m.direction === 'inbound' && (m as any).read_at == null,
+  ).length;
+  const [marking, setMarking] = useState(false);
+
+  async function markRead() {
+    setMarking(true);
+    try {
+      await fetch('/api/line/mark-read', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ line_user_id: lineUserId }),
+      });
+      setMessages((list) =>
+        list.map((m) =>
+          m.direction === 'inbound' && (m as any).read_at == null
+            ? ({ ...m, read_at: new Date().toISOString() } as any)
+            : m,
+        ),
+      );
+      toast.show('既読にしました', 'success');
+    } catch (err) {
+      toast.show('既読化に失敗しました', 'error');
+    } finally {
+      setMarking(false);
+    }
+  }
 
   // 末尾までスクロール
   useEffect(() => {
@@ -138,8 +158,27 @@ export function MessageThread({
         )}
         <div className="min-w-0 flex-1">
           <p className="font-medium text-ink-900 truncate">{conversationName}</p>
-          <p className="text-xs text-ink-400">公式 LINE</p>
+          <p className="text-xs text-ink-400">
+            公式 LINE
+            {unreadCount > 0 && (
+              <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-vivie-100 px-1.5 py-0.5 text-[10px] font-medium text-vivie-700">
+                未読 {unreadCount}
+              </span>
+            )}
+          </p>
         </div>
+        {unreadCount > 0 && (
+          <button
+            type="button"
+            onClick={markRead}
+            disabled={marking}
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-ink-700 hover:bg-vivie-50 hover:text-vivie-700"
+            title="既読にする"
+          >
+            {marking ? <Loader2 size={12} className="animate-spin" /> : <CheckCheck size={12} />}
+            既読
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {

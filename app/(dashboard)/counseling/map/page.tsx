@@ -14,7 +14,15 @@ export default async function CounselingMapPage() {
   if (staff.role !== 'admin' && staff.role !== 'manager') redirect('/counseling');
 
   const supabase = createClient();
-  const [{ data: resolved }, { count: unresolvedCount }, { data: unresolvedSamples }, { data: failedSamples }] = await Promise.all([
+  const [
+    { data: resolved },
+    { count: unresolvedCount },
+    { count: untriedCount },
+    { count: failedCount },
+    { count: addressedTotal },
+    { data: unresolvedSamples },
+    { data: failedSamples },
+  ] = await Promise.all([
     supabase
       .from('counseling_records')
       .select(
@@ -24,12 +32,31 @@ export default async function CounselingMapPage() {
       .not('geo_lng', 'is', null)
       .order('submitted_at', { ascending: false })
       .limit(2000),
+    // 未解決 (lat null + 住所あり)
     supabase
       .from('counseling_records')
       .select('id', { count: 'exact', head: true })
       .is('geo_lat', null)
       .not('address', 'is', null),
-    // 未試行の住所サンプル
+    // 未試行 (lat null + 住所あり + 試行履歴なし)
+    supabase
+      .from('counseling_records')
+      .select('id', { count: 'exact', head: true })
+      .is('geo_lat', null)
+      .is('geo_attempted_at', null)
+      .not('address', 'is', null),
+    // 試行済だが失敗 (lat null + 試行履歴あり)
+    supabase
+      .from('counseling_records')
+      .select('id', { count: 'exact', head: true })
+      .is('geo_lat', null)
+      .not('geo_attempted_at', 'is', null)
+      .not('address', 'is', null),
+    // 住所が登録されている全件
+    supabase
+      .from('counseling_records')
+      .select('id', { count: 'exact', head: true })
+      .not('address', 'is', null),
     supabase
       .from('counseling_records')
       .select('id, full_name, address')
@@ -38,7 +65,6 @@ export default async function CounselingMapPage() {
       .not('address', 'is', null)
       .order('submitted_at', { ascending: false })
       .limit(20),
-    // 試行したが失敗したもの
     supabase
       .from('counseling_records')
       .select('id, full_name, address, geo_error, geo_attempted_at')
@@ -65,6 +91,9 @@ export default async function CounselingMapPage() {
       <CounselingMapView
         points={(resolved ?? []) as any}
         unresolvedCount={unresolvedCount ?? 0}
+        untriedCount={untriedCount ?? 0}
+        failedCount={failedCount ?? 0}
+        addressedTotal={addressedTotal ?? 0}
         unresolvedSamples={(unresolvedSamples ?? []) as any}
         failedSamples={(failedSamples ?? []) as any}
       />
