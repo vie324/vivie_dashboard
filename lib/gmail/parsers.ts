@@ -17,21 +17,49 @@ export interface ParsedReservationFromEmail {
   notes: string | null;
 }
 
-// 共通ヘルパー
+// 実メールではラベル行は ■ / ・ / 全角空白 / 括弧 などのプレフィクスを持ち、
+// 値が同一行 (`ラベル：値`) と次行 (`ラベル\n　値`) のどちらでも現れる。
+const PREFIX_CHARS = '[\\s　■□◆◇●○▼▲・◦※〇（(\\[]';
+
+function getField(body: string, keywords: string[]): string | null {
+  const kw = keywords
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  // ラベル後のスペース部分には改行を含めない (改行は次のグループで明示的に扱う)
+  const re = new RegExp(
+    `(?:^|\\n)${PREFIX_CHARS}*(?:${kw})[ \\t　]*(?:[：:][ \\t　]*([^\\n\\r]+)|\\n[ \\t　]+([^\\n\\r]+))`,
+    'm',
+  );
+  const m = body.match(re);
+  return (m?.[1] ?? m?.[2])?.trim() ?? null;
+}
+
 function parseJaDateTime(s: string): string | null {
-  // 2026/05/15 14:00 / 2026年5月15日 14時00分 / 2026-05-15 14:00
+  // 対応:
+  //   2026/05/15 14:00
+  //   2026-05-15 14:00
+  //   2026年5月15日 14時00分
+  //   2026年06月13日（土）13:15  ← HPB
+  //   2026年5月1日（金）13:30    ← minimo
   const m = s.match(
-    /(\d{4})[\/年-](\d{1,2})[\/月-](\d{1,2})[日\s]+(\d{1,2})[時:](\d{1,2})/,
+    /(\d{4})[\/年-](\d{1,2})[\/月-](\d{1,2})日?(?:\s*[（(][^）)]*[）)])?\s*(\d{1,2})[時:](\d{1,2})/,
   );
   if (!m) return null;
   const [, y, mo, d, h, mi] = m;
-  const date = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi));
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
+  // メール本文の日時は JST 表記なので、Vercel など UTC 環境でも正しく扱うため
+  // JST = UTC+9 として明示的に換算する (new Date(y,m,d,h,mi) は実行環境のローカル TZ になってしまうため使わない)
+  const jstOffsetMs = 9 * 60 * 60 * 1000;
+  const ms =
+    Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)) - jstOffsetMs;
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
 }
 
 function parseDuration(s: string | null | undefined): number {
   if (!s) return 60;
+  // "1時間45分" / "1時間" / "45分"
+  const hm = s.match(/(\d+)\s*時間\s*(\d+)?\s*分?/);
+  if (hm) return parseInt(hm[1], 10) * 60 + parseInt(hm[2] || '0', 10);
   const m = s.match(/(\d+)\s*分/);
   if (m) return parseInt(m[1], 10);
   const num = parseInt(String(s).replace(/[^0-9]/g, ''), 10);
@@ -44,106 +72,130 @@ function parseAmount(s: string | null | undefined): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// 「池端 美帆（イケハタ ミホ）」のように同一行で名前 + フリガナ併記の場合に分解
+function splitNameFurigana(raw: string): { name: string; furigana: string | null } {
+  const m = raw.match(/^(.+?)\s*[（(]([^）)]+)[)）]\s*$/);
+  if (m) return { name: m[1].trim(), furigana: m[2].trim() };
+  return { name: raw, furigana: null };
+}
+
+// HPB の ■合計金額 配下は複数サブ行 (予約時合計金額 / お支払い予定金額 …) なので個別に拾う
+function findHpbAmount(body: string): number | null {
+  const m = body.match(
+    /(?:お支払い予定金額|予約時合計金額|合計金額|お支払い金額)[\s　:：]*([\d,，]+)\s*円/,
+  );
+  return m ? parseAmount(m[0]) : null;
+}
+
 // ===========================================================
 // HPB (ホットペッパービューティー / サロンボード) の通知メール
 // 件名例:
+//   予約連絡
 //   【ホットペッパービューティー】予約成立のお知らせ
-//   【ホットペッパービューティー】キャンセルのお知らせ
 //   サロンボード ご予約成立通知
-// 本文例 (代表的なテンプレ、実装側でフレキシブルに):
-//   ご予約日時: 2026年05月15日(金) 14:00
-//   ご予約時間: 60分
-//   お客様氏名: 山田 花子 様
-//   お客様氏名(フリガナ): ヤマダ ハナコ 様
-//   電話番号: 090-1234-5678
-//   メニュー: ハイドラフェイシャル + 小顔矯正
-//   担当: 粟田 麻央
-//   予約番号: HPBR-XXXXXXXXXX
 // ===========================================================
 export function parseHpbEmail(subject: string, body: string): ParsedReservationFromEmail | null {
-  if (!/(ホットペッパー|サロンボード)/.test(subject + body) && !/HPB/i.test(subject)) {
+  // 英語表記 (HOT PEPPER / SALON BOARD) も含めて広めに判定
+  if (
+    !/(ホットペッパー|サロンボード|HOT\s*PEPPER|SALON\s*BOARD|hotpepper|salonboard|HPB)/i.test(
+      subject + body,
+    )
+  ) {
     return null;
   }
 
-  const get = (re: RegExp) => {
-    const m = body.match(re);
-    return m?.[1]?.trim() ?? null;
-  };
-
-  const datetimeStr =
-    get(/(?:ご予約日時|来店日時|ご予約日|予約日時)\s*[::]\s*([^\n\r]+)/);
+  const datetimeStr = getField(body, ['ご予約日時', '来店日時', 'ご予約日', '予約日時']);
   const reservationAt = datetimeStr ? parseJaDateTime(datetimeStr) : null;
   if (!reservationAt) return null;
 
-  const customerName =
-    get(/(?:お客様氏名|お客様名|ご予約者|お名前)\s*[::]\s*([^\n\r]+?)\s*様?/) ?? '';
-  if (!customerName) return null;
+  const rawName = getField(body, ['お客様氏名', 'お客様名', 'ご予約者', 'お名前', '氏名']);
+  if (!rawName) return null;
+  const { name, furigana: furiganaFromName } = splitNameFurigana(
+    rawName.replace(/\s*(?:様|さま|さん)\s*$/, '').trim(),
+  );
 
-  const isCancel = /キャンセル|取消/.test(subject + body.slice(0, 200));
-  const isNoShow = /無断/.test(subject + body.slice(0, 200));
+  const isCancel = /キャンセル|取消/.test(subject + body.slice(0, 400));
+  const isNoShow = /無断/.test(subject + body.slice(0, 400));
+
+  const emailField = getField(body, ['メール', 'Eメール', 'E-mail']);
+  const emailMatch = emailField?.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
 
   return {
     source: 'hpb',
-    external_id: get(/(?:予約番号|予約ID|予約No\.?|ご予約番号)\s*[::]\s*([^\s\n\r]+)/),
-    customer_name: customerName,
-    customer_furigana: get(/(?:フリガナ|カナ|ふりがな)\s*[::]\s*([^\n\r]+?)\s*様?/),
-    customer_phone: get(/(?:電話番号|お電話番号|TEL|携帯)\s*[::]\s*([0-9\-+()\s]+)/)?.trim() ?? null,
-    customer_email: get(/(?:メール|Eメール|E-mail)\s*[::]\s*([\w.+-]+@[\w-]+\.[\w.-]+)/),
+    external_id:
+      getField(body, ['予約番号', '予約ID', '予約No.', '予約No', 'ご予約番号'])?.split(/\s/)[0] ??
+      null,
+    customer_name: name,
+    customer_furigana:
+      getField(body, ['フリガナ', 'カナ', 'ふりがな'])
+        ?.replace(/\s*(?:様|さま|さん)\s*$/, '')
+        .trim() ?? furiganaFromName,
+    customer_phone:
+      getField(body, ['電話番号', 'お電話番号', 'TEL', '携帯'])?.replace(/[^\d\-+()]/g, '') || null,
+    customer_email: emailMatch ? emailMatch[0] : null,
     reservation_at: reservationAt,
-    duration_minutes: parseDuration(get(/(?:ご予約時間|所要時間|施術時間)\s*[::]\s*([^\n\r]+)/)),
-    menu: get(/(?:メニュー|ご来店メニュー|コース|施術内容)\s*[::]\s*([^\n\r]+)/),
-    amount: parseAmount(get(/(?:金額|料金|合計|お会計)\s*[::]\s*([^\n\r]+)/)),
-    staff_name: get(/(?:担当|スタイリスト|担当者)\s*[::]\s*([^\n\r]+)/),
+    duration_minutes: parseDuration(
+      getField(body, ['所要時間目安', '所要時間', '施術時間', 'ご予約時間']),
+    ),
+    menu: getField(body, ['メニュー', 'ご来店メニュー', 'コース', '施術内容']),
+    amount: findHpbAmount(body) ?? parseAmount(getField(body, ['金額', '料金', 'お会計'])),
+    staff_name: getField(body, [
+      '指名スタッフ',
+      '担当スタッフ',
+      '担当者',
+      '担当',
+      'スタイリスト',
+      'スタッフ',
+    ]),
     status: isNoShow ? 'no_show' : isCancel ? 'cancelled' : 'confirmed',
-    notes: get(/(?:備考|お客様要望|要望)\s*[::]\s*([^\n\r]+)/),
+    notes: getField(body, ['ご要望・ご相談', 'ご要望', 'お客様要望', '備考', '要望']),
   };
 }
 
 // ===========================================================
 // minimo の通知メール
 // 件名例:
-//   【minimo】予約成立のお知らせ
-//   【minimo】予約キャンセルのお知らせ
-// 本文例:
-//   予約番号: M-XXXXX
-//   ご予約日時: 2026年5月15日(金) 14:00
-//   お客様: 山田 花子 さま
-//   電話番号: 090-1234-5678
-//   メニュー: ...
+//   【ミニモ】予約成立のお知らせ
+//   【ミニモ】xxx 様宛の新着メッセージのお知らせ (予約確定通知)
 // ===========================================================
 export function parseMinimoEmail(subject: string, body: string): ParsedReservationFromEmail | null {
-  if (!/minimo/i.test(subject + body.slice(0, 500))) return null;
+  if (!/(minimo|ミニモ|minimodel|salontool)/i.test(subject + body)) return null;
 
-  const get = (re: RegExp) => {
-    const m = body.match(re);
-    return m?.[1]?.trim() ?? null;
-  };
-
-  const datetimeStr = get(/(?:ご予約日時|予約日時|日時)\s*[::]\s*([^\n\r]+)/);
+  const datetimeStr = getField(body, ['ご予約日時', '予約日時', '来店日時', '日時']);
   const reservationAt = datetimeStr ? parseJaDateTime(datetimeStr) : null;
   if (!reservationAt) return null;
 
-  const customerName =
-    get(/(?:お客様|お客様名|ご予約者|お名前)\s*[::]\s*([^\n\r]+?)\s*(?:さま|さん|様)?$/m) ?? '';
-  if (!customerName) return null;
+  const rawName = getField(body, ['お客様氏名', 'お客様名', 'ご予約者', 'お名前', '氏名', 'お客様']);
+  if (!rawName) return null;
+  const { name, furigana: furiganaFromName } = splitNameFurigana(
+    rawName.replace(/\s*(?:様|さま|さん)\s*$/, '').trim(),
+  );
 
-  const isCancel = /キャンセル|取消/.test(subject + body.slice(0, 200));
-  const isNoShow = /無断/.test(subject + body.slice(0, 200));
+  const isCancel = /キャンセル|取消/.test(subject + body.slice(0, 400));
+  const isNoShow = /無断/.test(subject + body.slice(0, 400));
+
+  const emailField = getField(body, ['メール', 'Eメール']);
+  const emailMatch = emailField?.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
 
   return {
     source: 'minimo',
-    external_id: get(/(?:予約番号|予約ID|予約No)\s*[::]\s*([^\s\n\r]+)/),
-    customer_name: customerName,
-    customer_furigana: get(/(?:フリガナ|カナ)\s*[::]\s*([^\n\r]+?)\s*(?:さま|さん|様)?$/m),
-    customer_phone: get(/(?:電話番号|TEL)\s*[::]\s*([0-9\-+()\s]+)/)?.trim() ?? null,
-    customer_email: get(/(?:メール|Eメール)\s*[::]\s*([\w.+-]+@[\w-]+\.[\w.-]+)/),
+    external_id:
+      getField(body, ['予約番号', '予約ID', '予約No.', '予約No'])?.split(/\s/)[0] ?? null,
+    customer_name: name,
+    customer_furigana:
+      getField(body, ['フリガナ', 'カナ'])
+        ?.replace(/\s*(?:様|さま|さん)\s*$/, '')
+        .trim() ?? furiganaFromName,
+    customer_phone:
+      getField(body, ['電話番号', 'TEL'])?.replace(/[^\d\-+()]/g, '') || null,
+    customer_email: emailMatch ? emailMatch[0] : null,
     reservation_at: reservationAt,
-    duration_minutes: parseDuration(get(/(?:所要時間|施術時間|時間)\s*[::]\s*([^\n\r]+)/)),
-    menu: get(/(?:メニュー|コース|施術内容)\s*[::]\s*([^\n\r]+)/),
-    amount: parseAmount(get(/(?:金額|料金)\s*[::]\s*([^\n\r]+)/)),
-    staff_name: get(/(?:担当|スタッフ)\s*[::]\s*([^\n\r]+)/),
+    duration_minutes: parseDuration(getField(body, ['施術時間', '所要時間', '時間'])),
+    menu: getField(body, ['メニュー', 'コース', '施術内容']),
+    amount: parseAmount(getField(body, ['メニュー金額', '金額', '料金'])),
+    staff_name: getField(body, ['担当者', '担当スタッフ', '担当', 'スタッフ']),
     status: isNoShow ? 'no_show' : isCancel ? 'cancelled' : 'confirmed',
-    notes: get(/(?:備考|お客様要望)\s*[::]\s*([^\n\r]+)/),
+    notes: getField(body, ['備考', 'お客様要望', '要望']),
   };
 }
 
