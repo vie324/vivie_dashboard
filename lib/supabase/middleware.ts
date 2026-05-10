@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   '/api/staff/',
   '/api/square/webhook',
   '/api/line/webhook',
+  '/api/inbound/gmail',
   '/_next',
   '/favicon.ico',
 ];

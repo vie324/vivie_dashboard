@@ -1,5 +1,11 @@
 {
   "framework": "nextjs",
   "regions": ["hnd1"],
-  "github": { "silent": true }
+  "github": { "silent": true },
+  "crons": [
+    {
+      "path": "/api/gmail/watch?cron=1",
+      "schedule": "0 3 */6 * *"
+    }
+  ]
 }

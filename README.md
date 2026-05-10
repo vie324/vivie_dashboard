@@ -127,6 +127,81 @@ supabase db push
 - 会員詳細ページの「公式 LINE 連携」セクションから手動で会員と紐付け
 - 施術レポートで `初回来店 + 未契約` のお客様には「LINE で送信」ボタンが表示
 
+### 3c. Gmail プッシュ通知 (予約自動取り込み)
+
+HPB / minimo の予約通知メールを Gmail Pub/Sub プッシュで自動取り込みします。
+平均 5–30 秒の遅延で `reservations` テーブルに自動登録されます。
+
+#### 全体構成
+
+```
+HPB/minimo
+  ↓ 予約通知メール (~ 1 分)
+Vivie 専用 Gmail (例: bookings@vivie.salon)
+  ↓ Gmail watch (push)
+Google Cloud Pub/Sub
+  ↓ HTTPS Push (~ 5 秒)
+Vercel /api/inbound/gmail
+  ↓ メール本文パース
+Supabase reservations テーブル
+```
+
+#### 手順
+
+1. **Vivie 専用 Gmail アカウント作成**
+   - 任意のアドレス (例: `bookings@vivie.salon`)
+   - 2 段階認証は ON 推奨
+
+2. **Google Cloud Console** (<https://console.cloud.google.com/>) で:
+   - 新規プロジェクト作成 (例: `vivie-dashboard`)
+   - **APIs & Services** > **Library** > **Gmail API** を有効化
+   - **APIs & Services** > **Library** > **Cloud Pub/Sub API** を有効化
+
+3. **Pub/Sub トピック + サブスクリプション作成**
+   - **Pub/Sub** > **Topics** > **Create topic**: `gmail-vivie`
+   - 作成したトピックの **Permissions** タブで以下を Publisher として追加:
+     - `gmail-api-push@system.gserviceaccount.com`
+   - **Subscriptions** > **Create subscription**:
+     - Name: `gmail-vivie-sub`
+     - Delivery type: **Push**
+     - Endpoint URL: `https://<your-domain>/api/inbound/gmail?token=<GMAIL_PUBSUB_VERIFICATION_TOKEN>`
+     - Acknowledgement deadline: 60 秒程度
+
+4. **OAuth 2.0 クライアント作成**
+   - **APIs & Services** > **Credentials** > **Create Credentials** > **OAuth client ID**
+   - Type: **Web application**
+   - Authorized redirect URIs: `https://<your-domain>/api/gmail/oauth/callback`
+   - Client ID / Client Secret を取得
+
+5. **OAuth 同意画面の設定**
+   - Scopes に `gmail.readonly` `gmail.metadata` を追加
+   - Test users に Vivie 専用 Gmail のアドレスを追加 (本番公開しない場合)
+
+6. **Vercel 環境変数を設定**:
+   - `GOOGLE_OAUTH_CLIENT_ID` = (手順 4 で取得)
+   - `GOOGLE_OAUTH_CLIENT_SECRET` = (手順 4 で取得)
+   - `GMAIL_PUBSUB_TOPIC` = `projects/<PROJECT_ID>/topics/gmail-vivie`
+   - `GMAIL_PUBSUB_VERIFICATION_TOKEN` = ランダム文字列 (任意設定だが推奨)
+
+7. **Vercel 再デプロイ後**:
+   - ダッシュボード > **設定** > **Gmail 連携 > 詳細設定**
+   - 「**Gmail と連携**」ボタン → Vivie 専用 Gmail で同意 → 自動コールバック
+   - 「**Watch 開始 / 更新**」ボタンをクリック
+
+8. **HPB / minimo 側の設定**:
+   - HPB: サロンボード > 設定 > 通知メール送信先を Vivie 専用 Gmail に変更
+   - minimo: ストア管理 > 通知設定 > メール通知先を変更
+
+9. **動作確認**:
+   - HPB / minimo で予約が入ったら 5–30 秒で `/reservations` に出るはず
+   - **設定 > Gmail 連携** で受信ログとパース結果を確認
+   - パースが上手くいかない場合は「テストパーサ」セクションでメール本文を貼り付けて結果確認 → 必要なら正規表現を調整
+
+#### 制約
+
+- Gmail watch は最大 7 日で失効。Vercel Cron で 6 日に 1 回自動更新する設定が `vercel.json` に入っています
+- HPB / minimo の通知メールテンプレが変わった場合は `lib/gmail/parsers.ts` の正規表現を調整
+
 ### 4. 環境変数
 
 `.env.example` を `.env.local` にコピーして値を埋める。
