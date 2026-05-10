@@ -1,15 +1,19 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CounselingListView } from '@/components/counseling/counseling-list-view';
-import { Plus, ExternalLink } from 'lucide-react';
+import { Plus, ExternalLink, Upload, BarChart3, Map as MapIcon } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CounselingListPage() {
   const supabase = createClient();
+  const staff = await getCurrentStaff();
+  const isManager = staff?.role === 'admin' || staff?.role === 'manager';
+
   const [{ data: records }, { data: stores }] = await Promise.all([
     supabase
       .from('counseling_records')
@@ -17,7 +21,7 @@ export default async function CounselingListPage() {
         'id, full_name, furigana, phone, submitted_at, skin_concerns, face_concerns, body_concerns, goal_timeline, monthly_budget, reviewed_at, store:stores(name)',
       )
       .order('submitted_at', { ascending: false })
-      .limit(200),
+      .limit(500),
     supabase.from('stores').select('id, name').eq('is_active', true),
   ]);
 
@@ -27,12 +31,36 @@ export default async function CounselingListPage() {
         title="カウンセリング一覧"
         description="お客様の悩みをひと目で確認 ・ カードをクリックで会話用の詳細表示"
         actions={
-          <Link href="/counseling/new">
-            <Button size="sm">
-              <Plus size={14} />
-              新規入力
-            </Button>
-          </Link>
+          <>
+            {isManager && (
+              <>
+                <Link href="/counseling/map">
+                  <Button size="sm" variant="ghost">
+                    <MapIcon size={14} />
+                    マップ
+                  </Button>
+                </Link>
+                <Link href="/counseling/analytics">
+                  <Button size="sm" variant="ghost">
+                    <BarChart3 size={14} />
+                    分析
+                  </Button>
+                </Link>
+                <Link href="/counseling/import">
+                  <Button size="sm" variant="secondary">
+                    <Upload size={14} />
+                    一括取込
+                  </Button>
+                </Link>
+              </>
+            )}
+            <Link href="/counseling/new">
+              <Button size="sm">
+                <Plus size={14} />
+                新規入力
+              </Button>
+            </Link>
+          </>
         }
       />
 
