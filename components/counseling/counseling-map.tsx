@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Select, Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { Loader2, MapPin, Filter, Sparkles } from 'lucide-react';
+import { Loader2, MapPin, Filter, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 
 // Leaflet は SSR で window を使うため client only
 const MapBoard = dynamic(() => import('./map-board').then((m) => m.MapBoard), {
@@ -31,14 +31,25 @@ export interface MapPoint {
   submitted_at: string;
 }
 
+interface UnresolvedRow {
+  id: string;
+  full_name: string;
+  address: string | null;
+  geo_error?: string | null;
+  geo_attempted_at?: string | null;
+}
+
 interface Props {
   points: MapPoint[];
   unresolvedCount: number;
+  unresolvedSamples?: UnresolvedRow[];
+  failedSamples?: UnresolvedRow[];
 }
 
-export function CounselingMapView({ points, unresolvedCount }: Props) {
+export function CounselingMapView({ points, unresolvedCount, unresolvedSamples = [], failedSamples = [] }: Props) {
   const toast = useToast();
   const [running, setRunning] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [channelFilter, setChannelFilter] = useState('');
   const [contractFilter, setContractFilter] = useState<'all' | 'contracted' | 'not_contracted'>('all');
 
@@ -72,14 +83,14 @@ export function CounselingMapView({ points, unresolvedCount }: Props) {
       .sort((a, b) => b.total - a.total);
   }, [filtered]);
 
-  async function runBatch() {
-    if (!confirm('未解決の住所を最大 20 件まで処理します (約 30 秒)。続行しますか?')) return;
+  async function runBatch(limit = 20) {
+    if (!confirm(`未解決の住所を最大 ${limit} 件まで処理します (約 ${limit * 1.5} 秒)。続行しますか?`)) return;
     setRunning(true);
     try {
       const res = await fetch('/api/counseling/geocode-batch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ limit: 20 }),
+        body: JSON.stringify({ limit, retry_failed: true }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? '失敗しました');
@@ -87,12 +98,30 @@ export function CounselingMapView({ points, unresolvedCount }: Props) {
         `処理 ${body.processed} 件 / 解決 ${body.resolved} / 失敗 ${body.failed}`,
         body.resolved > 0 ? 'success' : 'info',
       );
-      // ページリロード
       window.location.reload();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : '失敗しました', 'error');
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function retryOne(id: string) {
+    setRetrying(id);
+    try {
+      const res = await fetch('/api/geocode', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? '失敗しました');
+      toast.show('解決しました。地図を更新します', 'success');
+      window.location.reload();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : '失敗しました', 'error');
+    } finally {
+      setRetrying(null);
     }
   }
 
@@ -125,10 +154,16 @@ export function CounselingMapView({ points, unresolvedCount }: Props) {
               </Field>
             </div>
             {unresolvedCount > 0 && (
-              <Button onClick={runBatch} disabled={running} variant="secondary" size="sm">
-                {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                未解決 {unresolvedCount} 件をジオコード
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => runBatch(20)} disabled={running} variant="secondary" size="sm">
+                  {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  20 件処理
+                </Button>
+                <Button onClick={() => runBatch(50)} disabled={running} size="sm">
+                  {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  最大 (50 件)
+                </Button>
+              </div>
             )}
           </div>
 
@@ -198,6 +233,96 @@ export function CounselingMapView({ points, unresolvedCount }: Props) {
           </table>
         </CardContent>
       </Card>
+
+      {/* 未試行の住所 */}
+      {unresolvedSamples.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>未処理の住所 (最大 20 件)</CardTitle>
+            <p className="mt-1 text-xs text-ink-500">
+              上の「処理」ボタンを押すと自動で解決されます (1 件ずつクリックでも実行可)
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th>氏名</th>
+                  <th>住所</th>
+                  <th className="w-32"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {unresolvedSamples.map((u) => (
+                  <tr key={u.id}>
+                    <td className="text-sm">{u.full_name}</td>
+                    <td className="text-xs text-ink-600 truncate max-w-md">{u.address}</td>
+                    <td className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={retrying === u.id}
+                        onClick={() => retryOne(u.id)}
+                      >
+                        {retrying === u.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        解決
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 失敗した住所 */}
+      {failedSamples.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-600" />
+              解決できなかった住所
+            </CardTitle>
+            <p className="mt-1 text-xs text-ink-500">
+              住所が細かすぎる / 表記揺れの可能性。番地以下を削って再試行されます。
+              GOOGLE_MAPS_API_KEY を設定すると精度が大幅に上がります。
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th>氏名</th>
+                  <th>住所</th>
+                  <th>エラー</th>
+                  <th className="w-32"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {failedSamples.map((u) => (
+                  <tr key={u.id}>
+                    <td className="text-sm">{u.full_name}</td>
+                    <td className="text-xs text-ink-600 truncate max-w-sm">{u.address}</td>
+                    <td className="text-xs text-amber-700">{u.geo_error}</td>
+                    <td className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={retrying === u.id}
+                        onClick={() => retryOne(u.id)}
+                      >
+                        {retrying === u.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        再試行
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

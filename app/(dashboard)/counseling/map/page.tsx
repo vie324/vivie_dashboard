@@ -14,7 +14,7 @@ export default async function CounselingMapPage() {
   if (staff.role !== 'admin' && staff.role !== 'manager') redirect('/counseling');
 
   const supabase = createClient();
-  const [{ data: resolved }, { count: unresolvedCount }] = await Promise.all([
+  const [{ data: resolved }, { count: unresolvedCount }, { data: unresolvedSamples }, { data: failedSamples }] = await Promise.all([
     supabase
       .from('counseling_records')
       .select(
@@ -29,6 +29,24 @@ export default async function CounselingMapPage() {
       .select('id', { count: 'exact', head: true })
       .is('geo_lat', null)
       .not('address', 'is', null),
+    // 未試行の住所サンプル
+    supabase
+      .from('counseling_records')
+      .select('id, full_name, address')
+      .is('geo_lat', null)
+      .is('geo_attempted_at', null)
+      .not('address', 'is', null)
+      .order('submitted_at', { ascending: false })
+      .limit(20),
+    // 試行したが失敗したもの
+    supabase
+      .from('counseling_records')
+      .select('id, full_name, address, geo_error, geo_attempted_at')
+      .is('geo_lat', null)
+      .not('geo_attempted_at', 'is', null)
+      .not('address', 'is', null)
+      .order('geo_attempted_at', { ascending: false })
+      .limit(20),
   ]);
 
   return (
@@ -47,6 +65,8 @@ export default async function CounselingMapPage() {
       <CounselingMapView
         points={(resolved ?? []) as any}
         unresolvedCount={unresolvedCount ?? 0}
+        unresolvedSamples={(unresolvedSamples ?? []) as any}
+        failedSamples={(failedSamples ?? []) as any}
       />
     </div>
   );
