@@ -33,26 +33,27 @@ export function SplashScreen() {
       aria-hidden
     >
       <div className="flex flex-col items-center gap-6 animate-fade-in-up px-6">
-        {!imgFailed && (
+        {!imgFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/vivie-logo.png"
             alt="vivie"
-            width={140}
-            height={140}
+            width={220}
+            height={220}
             className="rounded-3xl shadow-xl shadow-black/10"
             onError={() => setImgFailed(true)}
           />
+        ) : (
+          <span
+            className="font-serif text-white"
+            style={{
+              fontSize: 'clamp(3rem, 14vw, 6rem)',
+              letterSpacing: '0.16em',
+            }}
+          >
+            vivie
+          </span>
         )}
-        <span
-          className="font-serif text-white"
-          style={{
-            fontSize: 'clamp(3rem, 12vw, 5rem)',
-            letterSpacing: '0.16em',
-          }}
-        >
-          vivie
-        </span>
       </div>
     </div>
   );
