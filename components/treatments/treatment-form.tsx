@@ -6,7 +6,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { Loader2, User, Search } from 'lucide-react';
+import { Loader2, User, Search, ClipboardList, UserCheck } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { todayISO } from '@/lib/utils';
 import { ScoreInput } from './score-input';
 import { ScoreRadar } from './radar-chart';
@@ -23,21 +24,45 @@ interface MemberOpt {
   id: string;
   full_name: string;
   furigana: string | null;
+  line_picture_url?: string | null;
+}
+
+interface CounselingOpt {
+  id: string;
+  full_name: string;
+  furigana: string | null;
+  phone: string;
+  birth_date: string | null;
+  address: string | null;
+  occupation: string | null;
+  member_id: string | null;
+  submitted_at: string;
+  store_id: string | null;
 }
 
 interface Props {
   members: MemberOpt[];
   stores: { id: string; name: string }[];
+  counselings?: CounselingOpt[];
   staffId: string;
   defaultStoreId?: string | null;
 }
 
-export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Props) {
+export function TreatmentForm({
+  members,
+  stores,
+  counselings = [],
+  staffId,
+  defaultStoreId,
+}: Props) {
   const router = useRouter();
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [memberQuery, setMemberQuery] = useState('');
   const [memberId, setMemberId] = useState<string>('');
+  const [counselingId, setCounselingId] = useState<string>('');
+  const [counselingQuery, setCounselingQuery] = useState('');
 
   const filteredMembers = useMemo(() => {
     const q = memberQuery.trim().toLowerCase();
@@ -51,7 +76,21 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
       .slice(0, 30);
   }, [members, memberQuery]);
 
+  const filteredCounselings = useMemo(() => {
+    const q = counselingQuery.trim().toLowerCase();
+    if (!q) return counselings.slice(0, 30);
+    return counselings
+      .filter(
+        (c) =>
+          c.full_name.toLowerCase().includes(q) ||
+          (c.furigana ?? '').toLowerCase().includes(q) ||
+          c.phone.includes(q),
+      )
+      .slice(0, 30);
+  }, [counselings, counselingQuery]);
+
   const selectedMember = members.find((m) => m.id === memberId);
+  const selectedCounseling = counselings.find((c) => c.id === counselingId);
 
   const defaultExpiresAt = (() => {
     const d = new Date();
@@ -86,13 +125,54 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!memberId) {
-      toast.show('会員を選択してください', 'error');
-      return;
-    }
+
+    let resolvedMemberId = memberId;
+
     setSubmitting(true);
     try {
       const supabase = createClient();
+
+      // 新規モード: カウンセリングから member を解決 / 必要なら作成
+      if (mode === 'new') {
+        if (!selectedCounseling) {
+          toast.show('カウンセリングを選択してください', 'error');
+          setSubmitting(false);
+          return;
+        }
+        if (selectedCounseling.member_id) {
+          resolvedMemberId = selectedCounseling.member_id;
+        } else {
+          // member 自動作成
+          const { data: newMember, error: memberErr } = await supabase
+            .from('members')
+            .insert({
+              full_name: selectedCounseling.full_name,
+              furigana: selectedCounseling.furigana,
+              phone: selectedCounseling.phone,
+              birth_date: selectedCounseling.birth_date,
+              address: selectedCounseling.address,
+              occupation: selectedCounseling.occupation,
+              source: 'manual',
+              status: 'active',
+              primary_store_id: selectedCounseling.store_id ?? form.store_id,
+            })
+            .select('id')
+            .single();
+          if (memberErr) throw memberErr;
+          resolvedMemberId = (newMember as any).id;
+          // counseling 側にも反映
+          await supabase
+            .from('counseling_records')
+            .update({ member_id: resolvedMemberId })
+            .eq('id', selectedCounseling.id);
+        }
+      } else {
+        if (!memberId) {
+          toast.show('既存会員を選択してください', 'error');
+          setSubmitting(false);
+          return;
+        }
+      }
 
       // フォローアップオファー: 初回未契約 かつ オファー入力ありの場合のみ保存
       const wantsOffer = form.is_first_visit && !form.contracted;
@@ -111,7 +191,7 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
       const { data, error } = await supabase
         .from('treatment_reports')
         .insert({
-          member_id: memberId,
+          member_id: resolvedMemberId,
           store_id: form.store_id,
           staff_id: staffId,
           treatment_date: form.treatment_date,
@@ -125,7 +205,7 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
           after_photo_path: form.after_photo_path,
           observations: form.observations || null,
           next_recommendation: form.next_recommendation || null,
-          is_first_visit: form.is_first_visit,
+          is_first_visit: mode === 'new' ? true : form.is_first_visit,
           contracted: form.contracted,
           followup_offer: followupOffer,
         })
@@ -144,13 +224,108 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      {/* 会員選択 */}
+      {/* モード切替 */}
       <Card>
         <CardHeader>
-          <CardTitle>対象会員</CardTitle>
+          <CardTitle>対象お客様</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {selectedMember ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('new');
+                setMemberId('');
+              }}
+              className={cn(
+                'flex flex-col items-center gap-1 rounded-xl border-2 p-3 text-sm transition-all',
+                mode === 'new'
+                  ? 'border-vivie-300 bg-vivie-50/60 text-vivie-700'
+                  : 'border-ink-200 hover:bg-ink-50',
+              )}
+            >
+              <ClipboardList size={18} />
+              <span className="font-medium">新規来店</span>
+              <span className="text-[10px] text-ink-400">カウンセリング済から選択</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('existing');
+                setCounselingId('');
+              }}
+              className={cn(
+                'flex flex-col items-center gap-1 rounded-xl border-2 p-3 text-sm transition-all',
+                mode === 'existing'
+                  ? 'border-vivie-300 bg-vivie-50/60 text-vivie-700'
+                  : 'border-ink-200 hover:bg-ink-50',
+              )}
+            >
+              <UserCheck size={18} />
+              <span className="font-medium">既存のお客様</span>
+              <span className="text-[10px] text-ink-400">会員リストから選択</span>
+            </button>
+          </div>
+
+          {mode === 'new' ? (
+            selectedCounseling ? (
+              <div className="flex items-center justify-between rounded-xl border border-vivie-200 bg-vivie-50/50 px-3 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-vivie-200">
+                    <ClipboardList size={16} className="text-vivie-500" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium">{selectedCounseling.full_name}</p>
+                    <p className="text-xs text-ink-400">
+                      カウンセリング {selectedCounseling.submitted_at.slice(0, 10)}
+                      {selectedCounseling.member_id ? ' ・ 会員紐付済' : ' ・ 自動で会員作成されます'}
+                    </p>
+                  </div>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setCounselingId('')}>
+                  変更
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                  <Input
+                    className="pl-9"
+                    placeholder="氏名・フリガナ・電話で検索"
+                    value={counselingQuery}
+                    onChange={(e) => setCounselingQuery(e.target.value)}
+                  />
+                </div>
+                <div className="max-h-64 overflow-y-auto rounded-xl border border-ink-100 divide-y divide-ink-100">
+                  {filteredCounselings.length === 0 ? (
+                    <p className="p-3 text-sm text-ink-400 text-center">
+                      過去 90 日のカウンセリングが見つかりません
+                    </p>
+                  ) : (
+                    filteredCounselings.map((c) => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => setCounselingId(c.id)}
+                        className="block w-full px-3 py-2 text-left hover:bg-vivie-50/40"
+                      >
+                        <p className="text-sm font-medium">{c.full_name}</p>
+                        <p className="text-xs text-ink-400">
+                          {c.furigana ?? c.phone} ・ 提出日 {c.submitted_at.slice(0, 10)}
+                          {c.member_id && (
+                            <span className="ml-2 inline-flex rounded bg-emerald-50 text-emerald-700 px-1.5 text-[10px] font-medium">
+                              会員紐付済
+                            </span>
+                          )}
+                        </p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )
+          ) : selectedMember ? (
             <div className="flex items-center justify-between rounded-xl border border-vivie-200 bg-vivie-50/50 px-3 py-2.5">
               <div className="flex items-center gap-2.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-vivie-200">
@@ -211,10 +386,10 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <ToggleCard
-              checked={form.is_first_visit}
-              onChange={(v) => setForm((f) => ({ ...f, is_first_visit: v }))}
+              checked={mode === 'new' ? true : form.is_first_visit}
+              onChange={(v) => mode === 'existing' && setForm((f) => ({ ...f, is_first_visit: v }))}
               title="初回来店"
-              hint="新規のお客様"
+              hint={mode === 'new' ? '新規モードのため自動で ON' : '新規のお客様'}
             />
             <ToggleCard
               checked={form.contracted}
@@ -224,7 +399,7 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
               tone="green"
             />
           </div>
-          {form.is_first_visit && !form.contracted && (
+          {(mode === 'new' || form.is_first_visit) && !form.contracted && (
             <div className="rounded-xl bg-vivie-50/60 border border-vivie-200 px-4 py-3 text-sm text-vivie-700">
               💌 初回未契約のため、フォローアップ LINE 送信の対象です。下記にオファー内容を入力してください。
             </div>
@@ -233,7 +408,7 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
       </Card>
 
       {/* フォローアップオファー (初回未契約のみ) */}
-      {form.is_first_visit && !form.contracted && (
+      {(mode === 'new' || form.is_first_visit) && !form.contracted && (
         <Card>
           <CardHeader>
             <CardTitle>フォローアップオファー</CardTitle>
@@ -357,7 +532,7 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
       </Card>
 
       {/* 写真 */}
-      {memberId && (
+      {(memberId || counselingId) && (
         <Card>
           <CardHeader>
             <CardTitle>写真 (任意)</CardTitle>
@@ -368,13 +543,13 @@ export function TreatmentForm({ members, stores, staffId, defaultStoreId }: Prop
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <PhotoUploader
               label="施術前 (Before)"
-              pathPrefix={`${memberId}/${form.treatment_date}`}
+              pathPrefix={`${memberId || `c-${counselingId}`}/${form.treatment_date}`}
               value={form.before_photo_path}
               onChange={(path) => setForm((f) => ({ ...f, before_photo_path: path }))}
             />
             <PhotoUploader
               label="施術後 (After)"
-              pathPrefix={`${memberId}/${form.treatment_date}`}
+              pathPrefix={`${memberId || `c-${counselingId}`}/${form.treatment_date}`}
               value={form.after_photo_path}
               onChange={(path) => setForm((f) => ({ ...f, after_photo_path: path }))}
             />

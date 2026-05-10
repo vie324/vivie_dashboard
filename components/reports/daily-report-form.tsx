@@ -40,6 +40,8 @@ export function DailyReportForm({
     hpb_contract_count: initial?.hpb_contract_count ?? 0,
     meta_new_count: initial?.meta_new_count ?? 0,
     meta_contract_count: initial?.meta_contract_count ?? 0,
+    minimo_new_count: initial?.minimo_new_count ?? 0,
+    minimo_contract_count: initial?.minimo_contract_count ?? 0,
     referral_new_count: initial?.referral_new_count ?? 0,
     referral_contract_count: initial?.referral_contract_count ?? 0,
     existing_treatment_count: initial?.existing_treatment_count ?? 0,
@@ -58,8 +60,13 @@ export function DailyReportForm({
   const repeatRate = form.existing_treatment_count > 0
     ? Math.round((form.repeat_count / form.existing_treatment_count) * 100)
     : 0;
-  const newTotal = form.hpb_new_count + form.meta_new_count + form.referral_new_count;
-  const contractTotal = form.hpb_contract_count + form.meta_contract_count + form.referral_contract_count;
+  const newTotal =
+    form.hpb_new_count + form.meta_new_count + form.minimo_new_count + form.referral_new_count;
+  const contractTotal =
+    form.hpb_contract_count +
+    form.meta_contract_count +
+    form.minimo_contract_count +
+    form.referral_contract_count;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -163,7 +170,7 @@ export function DailyReportForm({
           <CardTitle>新規集客 (媒体ごとの来店 / 契約)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <ChannelInput
               label="ホットペッパー"
               newCount={form.hpb_new_count}
@@ -177,6 +184,13 @@ export function DailyReportForm({
               contract={form.meta_contract_count}
               onNewChange={(v) => num('meta_new_count', v)}
               onContractChange={(v) => num('meta_contract_count', v)}
+            />
+            <ChannelInput
+              label="minimo"
+              newCount={form.minimo_new_count}
+              contract={form.minimo_contract_count}
+              onNewChange={(v) => num('minimo_new_count', v)}
+              onContractChange={(v) => num('minimo_contract_count', v)}
             />
             <ChannelInput
               label="紹介"

@@ -47,3 +47,14 @@ export function generateToken(): string {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
+
+// 「苗字 名前」順で連結
+export function joinJaName(
+  familyName?: string | null,
+  givenName?: string | null,
+  fallback?: string | null,
+): string {
+  return (
+    [familyName, givenName].filter(Boolean).join(' ').trim() || fallback || '名前未設定'
+  );
+}

@@ -145,8 +145,10 @@ export async function POST() {
       const res = await sq.customersApi.searchCustomers(reqBody);
       const customers = res.result.customers ?? [];
       for (const c of customers) {
+        // Square API は givenName / familyName が逆になりがち (英米式: given=First / family=Last)
+        // 日本式 (苗字 名前 順) で連結
         const fullName =
-          [c.givenName, c.familyName].filter(Boolean).join(' ').trim() ||
+          [c.familyName, c.givenName].filter(Boolean).join(' ').trim() ||
           c.companyName ||
           '名前未設定';
         const { error: memberErr } = await supabase.from('members').upsert(
