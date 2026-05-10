@@ -19,6 +19,7 @@ import {
   Sun,
   Target,
   Ticket,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -46,6 +47,7 @@ const navGroups: NavGroup[] = [
     label: '顧客',
     items: [
       { href: '/members', label: '会員管理', icon: Users },
+      { href: '/reservations', label: '予約', icon: CalendarDays },
       { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true },
       { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
       { href: '/treatments', label: '施術レポート', icon: Activity },
