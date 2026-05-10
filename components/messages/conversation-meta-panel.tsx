@@ -199,7 +199,13 @@ export function ConversationMetaPanel({
             編集
           </button>
         </div>
-        <p className="text-sm">{initialDisplayName ?? '(名前未取得)'}</p>
+        {initialDisplayName ? (
+          <p className="text-sm">{initialDisplayName}</p>
+        ) : (
+          <p className="text-xs text-ink-400">
+            未取得 (お客様が友だち追加していない可能性)
+          </p>
+        )}
       </div>
 
       {/* 内部メモ */}
