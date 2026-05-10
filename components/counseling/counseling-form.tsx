@@ -23,10 +23,11 @@ interface Props {
   storeId?: string | null;
   storeName?: string;
   embed?: boolean; // 公開フォーム or 管理画面
+  disclaimer?: string | null;
   onComplete?: () => void;
 }
 
-export function CounselingForm({ storeId, storeName, embed = false, onComplete }: Props) {
+export function CounselingForm({ storeId, storeName, embed = false, disclaimer, onComplete }: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -317,8 +318,16 @@ export function CounselingForm({ storeId, storeName, embed = false, onComplete }
         </CardContent>
       </Card>
 
-      {/* 同意 */}
+      {/* 注意事項 + 同意 */}
       <Card>
+        {disclaimer && disclaimer.trim() && (
+          <CardHeader>
+            <CardTitle>注意事項・免責事項</CardTitle>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
+              {disclaimer}
+            </p>
+          </CardHeader>
+        )}
         <CardContent>
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -328,7 +337,7 @@ export function CounselingForm({ storeId, storeName, embed = false, onComplete }
               className="mt-0.5 h-4 w-4 rounded border-ink-300 text-vivie-500 focus:ring-vivie-300"
             />
             <span className="text-sm text-ink-700">
-              施術内容・注意事項を理解し、上記の情報を提供することに同意します。
+              上記の注意事項・免責事項を理解し、同意のうえ情報を提供します。
             </span>
           </label>
         </CardContent>

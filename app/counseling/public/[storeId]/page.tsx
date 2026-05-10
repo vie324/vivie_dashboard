@@ -12,12 +12,19 @@ export default async function PublicCounselingPage({
   params: { storeId: string };
 }) {
   const supabase = createClient();
-  const { data: store } = await supabase
-    .from('stores')
-    .select('id, name')
-    .eq('id', params.storeId)
-    .eq('is_active', true)
-    .maybeSingle();
+  const [{ data: store }, { data: settings }] = await Promise.all([
+    supabase
+      .from('stores')
+      .select('id, name')
+      .eq('id', params.storeId)
+      .eq('is_active', true)
+      .maybeSingle(),
+    supabase
+      .from('counseling_settings')
+      .select('disclaimer')
+      .eq('id', 'default')
+      .maybeSingle(),
+  ]);
   if (!store) notFound();
 
   return (
@@ -34,12 +41,17 @@ export default async function PublicCounselingPage({
                 vivie
               </span>
             </div>
-            <h1 className="font-serif text-2xl font-semibold text-ink-900 mt-4">{store.name}</h1>
+            <h1 className="font-serif text-2xl font-semibold text-ink-900 mt-4">{(store as any).name}</h1>
             <p className="mt-2 text-sm text-ink-500">
               ご来店前にカウンセリングシートをご記入ください
             </p>
           </header>
-          <CounselingForm storeId={store.id} storeName={store.name} embed />
+          <CounselingForm
+            storeId={(store as any).id}
+            storeName={(store as any).name}
+            embed
+            disclaimer={(settings as any)?.disclaimer ?? null}
+          />
           <footer className="mt-10 text-center text-xs text-ink-400">
             ご記入いただいた情報は施術の参考としてのみ使用いたします
           </footer>
