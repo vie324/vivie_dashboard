@@ -8,6 +8,7 @@ import { Field, Select } from '@/components/ui/input';
 export default function NewCounselingPage() {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [selected, setSelected] = useState<string>('');
+  const [disclaimer, setDisclaimer] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -16,9 +17,17 @@ export default function NewCounselingPage() {
       .select('id, name')
       .eq('is_active', true)
       .then(({ data }) => {
-        const list = data ?? [];
+        const list = (data ?? []) as { id: string; name: string }[];
         setStores(list);
         setSelected(list[0]?.id ?? '');
+      });
+    supabase
+      .from('counseling_settings')
+      .select('disclaimer')
+      .eq('id', 'default')
+      .maybeSingle()
+      .then(({ data }) => {
+        setDisclaimer((data as any)?.disclaimer ?? null);
       });
   }, []);
 
@@ -36,7 +45,7 @@ export default function NewCounselingPage() {
         </Select>
       </Field>
 
-      <CounselingForm storeId={selected || null} />
+      <CounselingForm storeId={selected || null} disclaimer={disclaimer} />
     </div>
   );
 }

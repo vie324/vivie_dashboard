@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { StoreSettings } from '@/components/settings/store-settings';
 import { StaffSettings } from '@/components/settings/staff-settings';
 import { StaffInviteForm } from '@/components/settings/staff-invite-form';
+import { CounselingSettings } from '@/components/settings/counseling-settings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -17,12 +18,17 @@ export default async function SettingsPage() {
   if (staff.role === 'staff') redirect('/');
 
   const supabase = createClient();
-  const [{ data: stores }, { data: allStaff }] = await Promise.all([
+  const [{ data: stores }, { data: allStaff }, { data: counselingSettings }] = await Promise.all([
     supabase.from('stores').select('*').order('name'),
     supabase
       .from('staff')
       .select('*, primary_store:stores(name)')
       .order('display_name'),
+    supabase
+      .from('counseling_settings')
+      .select('disclaimer')
+      .eq('id', 'default')
+      .maybeSingle(),
   ]);
 
   return (
@@ -70,6 +76,18 @@ export default async function SettingsPage() {
             HPB / minimo の予約通知メールを Gmail Pub/Sub プッシュで自動取り込み。
             平均 5–30 秒の遅延で <code>reservations</code> テーブルに自動登録されます。
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>カウンセリングフォーム 注意事項</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CounselingSettings
+            initialDisclaimer={(counselingSettings as any)?.disclaimer ?? ''}
+            canEdit={staff.role === 'admin' || staff.role === 'manager'}
+          />
         </CardContent>
       </Card>
 
