@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar } from '@/components/ui/avatar';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
-import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle } from 'lucide-react';
+import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
 import { formatYen, formatDate, todayISO } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
 
@@ -22,6 +22,11 @@ export default async function DashboardHome() {
   const monthStart = today.slice(0, 7) + '-01';
 
   // 期間別データはクライアント側で再取得するので、ここでは初期表示用 (今月)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
   const [
     membersRes,
     activeSubsRes,
@@ -32,6 +37,7 @@ export default async function DashboardHome() {
     recentTreatmentsRes,
     dailySalesRes,
     expiringTicketsRes,
+    todayReservationsRes,
   ] = await Promise.all([
     supabase.from('members').select('id, status', { count: 'exact', head: false }),
     supabase
@@ -77,6 +83,15 @@ export default async function DashboardHome() {
       .gte('days_until_expiry', 0)
       .order('days_until_expiry', { ascending: true })
       .limit(8),
+    // 今日の予約
+    supabase
+      .from('reservation_overview')
+      .select('id, customer_name, member_full_name, member_picture, reservation_at, duration_minutes, menu, source, status, staff_name')
+      .gte('reservation_at', todayStart.toISOString())
+      .lte('reservation_at', todayEnd.toISOString())
+      .neq('status', 'cancelled')
+      .neq('status', 'no_show')
+      .order('reservation_at', { ascending: true }),
   ]);
 
   const totalMembers = membersRes.count ?? 0;
@@ -147,6 +162,53 @@ export default async function DashboardHome() {
           />
         </div>
       </DashboardClient>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="text-vivie-500" size={18} />
+            今日の予約 ({(todayReservationsRes.data ?? []).length} 件)
+          </CardTitle>
+          <Link href="/reservations" className="text-xs text-ink-500 hover:text-vivie-600">
+            すべて見る →
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(todayReservationsRes.data ?? []).length === 0 ? (
+            <p className="px-5 py-6 text-sm text-ink-400 text-center">
+              今日の予約はありません
+            </p>
+          ) : (
+            <ul className="divide-y divide-ink-100">
+              {(todayReservationsRes.data ?? []).map((r: any) => {
+                const start = new Date(r.reservation_at);
+                const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+                return (
+                  <li key={r.id} className="flex items-center gap-3 px-5 py-2.5">
+                    <span className="text-sm font-mono text-ink-700 w-12">{time}</span>
+                    <Avatar
+                      name={r.member_full_name ?? r.customer_name}
+                      src={r.member_picture}
+                      size="sm"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {r.member_full_name ?? r.customer_name}
+                      </p>
+                      <p className="text-xs text-ink-500 truncate">
+                        {r.menu ?? '—'}{r.staff_name && ` ・ ${r.staff_name}`}
+                      </p>
+                    </div>
+                    <span className="text-[10px] rounded-full bg-ink-100 text-ink-600 px-2 py-0.5">
+                      {r.source}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {(expiringTicketsRes.data ?? []).length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
