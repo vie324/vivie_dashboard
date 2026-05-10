@@ -150,8 +150,10 @@ function FilterTabs({
 }
 
 function ConversationItem({ c }: { c: Conversation }) {
-  const name = c.member_name ?? c.line_display_name ?? '(名前未取得)';
-  const initials = name.slice(0, 1);
+  const fallbackName = `LINE …${c.line_user_id.slice(-6)}`;
+  const name = c.member_name ?? c.line_display_name ?? fallbackName;
+  const hasRealName = !!(c.member_name || c.line_display_name);
+  const initials = (c.member_name ?? c.line_display_name ?? '?').slice(0, 1);
   const isUnlinked = !c.member_id;
 
   return (
@@ -172,7 +174,9 @@ function ConversationItem({ c }: { c: Conversation }) {
           <div className="flex items-center justify-between gap-2">
             <p className="font-medium text-ink-900 truncate flex items-center gap-1.5">
               {c.pinned && <Pin size={11} className="text-vivie-500 shrink-0" />}
-              {name}
+              <span className={hasRealName ? '' : 'font-mono text-xs text-ink-400'}>
+                {name}
+              </span>
               {isUnlinked && (
                 <span className="rounded-md bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-medium shrink-0">
                   未連携

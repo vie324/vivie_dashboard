@@ -53,11 +53,12 @@ export default async function ThreadPage({ params }: { params: { userId: string 
     memberInfo = m;
   }
 
+  const fallbackName = `LINE …${userId.slice(-6)}`;
   const displayName =
     memberInfo?.full_name ??
     (conv as any).line_display_name ??
     (lastEvent as any)?.display_name ??
-    '(名前未取得)';
+    fallbackName;
 
   return (
     <div className="animate-fade-in-up">
