@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CounselingReviewActions } from '@/components/counseling/review-actions';
+import { PostCounselingForm } from '@/components/counseling/post-counseling-form';
 import {
   VISIT_REASONS,
   PAST_TREATMENTS,
@@ -47,8 +48,8 @@ export default async function CounselingDetailPage({ params }: { params: { id: s
   if (!record) notFound();
   const r = record as any;
 
-  // 前後のレコードを取得 (一覧での順序と一致)
-  const [{ data: prevList }, { data: nextList }] = await Promise.all([
+  // 前後のレコード + スタッフ一覧
+  const [{ data: prevList }, { data: nextList }, { data: staffList }] = await Promise.all([
     supabase
       .from('counseling_records')
       .select('id')
@@ -61,6 +62,11 @@ export default async function CounselingDetailPage({ params }: { params: { id: s
       .lt('submitted_at', r.submitted_at)
       .order('submitted_at', { ascending: false })
       .limit(1),
+    supabase
+      .from('staff')
+      .select('id, display_name')
+      .eq('is_active', true)
+      .order('display_name'),
   ]);
   const prev = (prevList ?? [])[0];
   const next = (nextList ?? [])[0];
@@ -139,6 +145,22 @@ export default async function CounselingDetailPage({ params }: { params: { id: s
           </div>
         </CardContent>
       </Card>
+
+      {/* 施術後の入力 (担当者 / 媒体 / クロージング / 契約コース など) */}
+      <PostCounselingForm
+        recordId={r.id}
+        staff={(staffList ?? []) as any}
+        initial={{
+          assigned_staff_id: r.assigned_staff_id,
+          acquisition_channel: r.acquisition_channel,
+          closing_status: r.closing_status,
+          closing_status_raw: r.closing_status_raw,
+          next_reservation_date: r.next_reservation_date,
+          no_contract_reason: r.no_contract_reason,
+          contract_reason: r.contract_reason,
+          contract_plan: r.contract_plan,
+        }}
+      />
 
       {/* 悩み (大きく強調) */}
       <Card>

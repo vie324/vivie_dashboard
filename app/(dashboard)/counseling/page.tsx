@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CounselingListView } from '@/components/counseling/counseling-list-view';
-import { Plus, ExternalLink, Upload, BarChart3 } from 'lucide-react';
+import { Plus, ExternalLink, Upload, BarChart3, Map as MapIcon } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +34,12 @@ export default async function CounselingListPage() {
           <>
             {isManager && (
               <>
+                <Link href="/counseling/map">
+                  <Button size="sm" variant="ghost">
+                    <MapIcon size={14} />
+                    マップ
+                  </Button>
+                </Link>
                 <Link href="/counseling/analytics">
                   <Button size="sm" variant="ghost">
                     <BarChart3 size={14} />
