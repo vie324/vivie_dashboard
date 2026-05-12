@@ -17,6 +17,26 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // 公開カウンセリングフォームは LINE 内蔵ブラウザのキャッシュで
+  // 404 などが残ると詰むため、CDN / ブラウザ双方でキャッシュさせない
+  async headers() {
+    return [
+      {
+        source: '/counseling/public/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, max-age=0',
+          },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+          // LINE 内蔵ブラウザ向けに、リファラを保持して
+          // openExternalBrowser=1 が剥がれた場合にも検知できるように
+          { key: 'X-Robots-Tag', value: 'noindex' },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
