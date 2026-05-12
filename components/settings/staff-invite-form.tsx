@@ -20,7 +20,7 @@ export function StaffInviteForm({ stores }: Props) {
     email: '',
     password: '',
     display_name: '',
-    role: 'staff' as 'admin' | 'manager' | 'staff',
+    role: 'staff' as 'admin' | 'manager' | 'staff' | 'store',
     primary_store_id: stores[0]?.id ?? '',
   });
 
@@ -97,6 +97,7 @@ export function StaffInviteForm({ stores }: Props) {
               onChange={(e) => update('role', e.target.value as any)}
             >
               <option value="staff">スタッフ</option>
+              <option value="store">店舗 (iPad / 店舗 PC 共有)</option>
               <option value="manager">マネージャー</option>
               <option value="admin">管理者</option>
             </Select>

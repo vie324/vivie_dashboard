@@ -7,6 +7,7 @@ import { DailyReportForm } from '@/components/reports/daily-report-form';
 export default async function NewReportPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect('/login');
+  if (staff.role === 'store') redirect('/');
   const supabase = createClient();
   const { data: stores } = await supabase
     .from('stores')

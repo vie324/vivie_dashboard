@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function EditReportPage({ params }: { params: { id: string } }) {
   const staff = await getCurrentStaff();
   if (!staff) redirect('/login');
+  if (staff.role === 'store') redirect('/');
 
   const supabase = createClient();
   const [{ data: report }, { data: stores }] = await Promise.all([

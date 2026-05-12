@@ -6,12 +6,14 @@ const roleLabel: Record<Staff['role'], string> = {
   admin: '管理者',
   manager: 'マネージャー',
   staff: 'スタッフ',
+  store: '店舗',
 };
 
 const roleClass: Record<Staff['role'], string> = {
   admin: 'bg-vivie-100 text-vivie-700',
   manager: 'bg-amber-50 text-amber-700',
   staff: 'bg-ink-100 text-ink-700',
+  store: 'bg-emerald-50 text-emerald-700',
 };
 
 export function TopBar({

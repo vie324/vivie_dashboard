@@ -27,7 +27,8 @@ export function StaffUrlAdmin({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [items, setItems] = useState(staff);
+  // 店舗ロールはメールログイン用なので個人 URL 発行対象から除外
+  const [items, setItems] = useState(staff.filter((s) => s.role !== 'store'));
 
   async function regenerateToken(id: string) {
     if (!confirm('URL を再発行しますか? 既存の URL は無効になります')) return;

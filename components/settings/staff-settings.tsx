@@ -100,6 +100,7 @@ export function StaffSettings({
                   <option value="admin">管理者</option>
                   <option value="manager">マネージャー</option>
                   <option value="staff">スタッフ</option>
+                  <option value="store">店舗 (iPad / 店舗 PC)</option>
                 </Select>
               </Field>
               <Field label="主担当店舗">

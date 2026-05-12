@@ -69,3 +69,8 @@ export async function requireManager(): Promise<Staff> {
   }
   return staff;
 }
+
+// 店舗 (iPad / 店舗 PC) ロールでは隠す機能の判定
+export function isStoreRole(role: Staff['role']): boolean {
+  return role === 'store';
+}

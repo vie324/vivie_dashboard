@@ -32,6 +32,8 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   showBadge?: boolean;
+  // 店舗ロール (iPad / 店舗 PC) でも表示する項目
+  storeAllowed?: boolean;
 }
 interface NavGroup {
   label: string;
@@ -42,25 +44,25 @@ interface NavGroup {
 const navGroups: NavGroup[] = [
   {
     label: '概要',
-    items: [{ href: '/', label: 'ダッシュボード', icon: LayoutDashboard }],
+    items: [{ href: '/', label: 'ダッシュボード', icon: LayoutDashboard, storeAllowed: true }],
   },
   {
     label: '顧客',
     items: [
-      { href: '/members', label: '会員管理', icon: Users },
-      { href: '/reservations', label: '予約', icon: CalendarDays },
-      { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true },
-      { href: '/counseling', label: 'カウンセリング', icon: ClipboardList },
-      { href: '/skin-analysis', label: '肌分析', icon: Scan },
-      { href: '/treatments', label: '施術レポート', icon: Activity },
+      { href: '/members', label: '会員管理', icon: Users, storeAllowed: true },
+      { href: '/reservations', label: '予約', icon: CalendarDays, storeAllowed: true },
+      { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true, storeAllowed: true },
+      { href: '/counseling', label: 'カウンセリング', icon: ClipboardList, storeAllowed: true },
+      { href: '/skin-analysis', label: '肌分析', icon: Scan, storeAllowed: true },
+      { href: '/treatments', label: '施術レポート', icon: Activity, storeAllowed: true },
     ],
   },
   {
     label: '売上 / 運営',
     items: [
       { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
-      { href: '/tickets', label: '回数券', icon: Ticket },
-      { href: '/cashbook', label: '出納帳', icon: Wallet },
+      { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
+      { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
       { href: '/goals', label: '目標管理', icon: Target },
       { href: '/attendance', label: '勤怠', icon: MapPin },
@@ -130,7 +132,21 @@ export function Sidebar({
     };
   }, []);
 
-  const visibleGroups = navGroups.filter((g) => !g.adminOnly || staff.role !== 'staff');
+  const isStore = staff.role === 'store';
+  const visibleGroups = navGroups
+    .filter((g) => {
+      // 店舗ロール: adminOnly グループは非表示
+      if (isStore && g.adminOnly) return false;
+      // スタッフロール: adminOnly グループは非表示
+      if (!isStore && g.adminOnly && staff.role === 'staff') return false;
+      return true;
+    })
+    .map((g) => ({
+      ...g,
+      // 店舗ロール: storeAllowed=true の項目だけ表示
+      items: isStore ? g.items.filter((i) => i.storeAllowed) : g.items,
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <>

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -10,6 +11,8 @@ export const dynamic = 'force-dynamic';
 export default async function AttendancePage() {
   const staff = await getCurrentStaff();
   if (!staff) return null;
+  // 店舗アカウントは勤怠機能にアクセス不可
+  if (staff.role === 'store') redirect('/');
 
   const supabase = createClient();
   const isManager = staff.role === 'admin' || staff.role === 'manager';
