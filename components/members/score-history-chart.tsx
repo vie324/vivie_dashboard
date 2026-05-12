@@ -9,13 +9,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { SKIN_AXES, FACE_AXES, BODY_AXES, avgScore } from '@/lib/treatment-axes';
+import { SKIN_AXES, FACE_AXES, avgScore } from '@/lib/treatment-axes';
 
 interface T {
   treatment_date: string;
   skin_scores: any;
   face_scores: any;
-  body_scores: any;
 }
 
 export function ScoreHistoryChart({ treatments }: { treatments: T[] }) {
@@ -24,7 +23,6 @@ export function ScoreHistoryChart({ treatments }: { treatments: T[] }) {
     date: t.treatment_date.slice(5),
     肌: avgScore(SKIN_AXES, t.skin_scores ?? {}),
     顔: avgScore(FACE_AXES, t.face_scores ?? {}),
-    体: avgScore(BODY_AXES, t.body_scores ?? {}),
   }));
 
   return (
@@ -44,7 +42,7 @@ export function ScoreHistoryChart({ treatments }: { treatments: T[] }) {
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Line type="monotone" dataKey="肌" stroke="#C98785" strokeWidth={2} dot={{ r: 3 }} />
         <Line type="monotone" dataKey="顔" stroke="#D97706" strokeWidth={2} dot={{ r: 3 }} />
-        <Line type="monotone" dataKey="体" stroke="#0EA5E9" strokeWidth={2} dot={{ r: 3 }} />
+
       </LineChart>
     </ResponsiveContainer>
   );

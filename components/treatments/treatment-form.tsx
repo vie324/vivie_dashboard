@@ -15,7 +15,6 @@ import { PhotoUploader } from './photo-uploader';
 import {
   SKIN_AXES,
   FACE_AXES,
-  BODY_AXES,
   emptyScores,
   type ScoreMap,
 } from '@/lib/treatment-axes';
@@ -121,7 +120,6 @@ export function TreatmentForm({
   });
   const [skin, setSkin] = useState<ScoreMap>(emptyScores(SKIN_AXES));
   const [face, setFace] = useState<ScoreMap>(emptyScores(FACE_AXES));
-  const [body, setBody] = useState<ScoreMap>(emptyScores(BODY_AXES));
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -200,7 +198,7 @@ export function TreatmentForm({
           amount: form.amount || null,
           skin_scores: skin,
           face_scores: face,
-          body_scores: body,
+          body_scores: {},
           before_photo_path: form.before_photo_path,
           after_photo_path: form.after_photo_path,
           observations: form.observations || null,
@@ -434,18 +432,28 @@ export function TreatmentForm({
             <Field label="通常価格 (円)">
               <Input
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.offer_original_price}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, offer_original_price: Number(e.target.value) || 0 }))
+                  setForm((f) => ({
+                    ...f,
+                    offer_original_price: Number(e.target.value.replace(/[^\d]/g, '')) || 0,
+                  }))
                 }
               />
             </Field>
             <Field label="特別価格 (円)">
               <Input
                 type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.offer_discounted_price}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, offer_discounted_price: Number(e.target.value) || 0 }))
+                  setForm((f) => ({
+                    ...f,
+                    offer_discounted_price: Number(e.target.value.replace(/[^\d]/g, '')) || 0,
+                  }))
                 }
               />
             </Field>
@@ -515,17 +523,29 @@ export function TreatmentForm({
           <Field label="所要時間 (分)">
             <Input
               type="number"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.duration_minutes}
               onChange={(e) =>
-                setForm((f) => ({ ...f, duration_minutes: Number(e.target.value) || 0 }))
+                setForm((f) => ({
+                  ...f,
+                  duration_minutes: Number(e.target.value.replace(/[^\d]/g, '')) || 0,
+                }))
               }
             />
           </Field>
           <Field label="金額 (円)">
             <Input
               type="number"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  amount: Number(e.target.value.replace(/[^\d]/g, '')) || 0,
+                }))
+              }
             />
           </Field>
         </CardContent>
@@ -578,18 +598,6 @@ export function TreatmentForm({
           <ScoreInput axes={FACE_AXES} values={face} onChange={setFace} />
           <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-3">
             <ScoreRadar axes={FACE_AXES} current={face} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>体の状態 (1-5)</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ScoreInput axes={BODY_AXES} values={body} onChange={setBody} />
-          <div className="rounded-xl border border-ink-100 bg-ink-50/40 p-3">
-            <ScoreRadar axes={BODY_AXES} current={body} />
           </div>
         </CardContent>
       </Card>
