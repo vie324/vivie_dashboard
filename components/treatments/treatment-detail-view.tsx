@@ -3,13 +3,12 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScoreRadar } from './radar-chart';
-import { SKIN_AXES, FACE_AXES, BODY_AXES, avgScore } from '@/lib/treatment-axes';
+import { SKIN_AXES, FACE_AXES, avgScore } from '@/lib/treatment-axes';
 import { ImageOff } from 'lucide-react';
 
 interface ReportLike {
   skin_scores: Record<string, number>;
   face_scores: Record<string, number>;
-  body_scores: Record<string, number>;
   before_photo_path: string | null;
   after_photo_path: string | null;
 }
@@ -57,7 +56,7 @@ export function TreatmentDetailView({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ScoreCard
           title="肌"
           axes={SKIN_AXES}
@@ -69,12 +68,6 @@ export function TreatmentDetailView({
           axes={FACE_AXES}
           current={report.face_scores}
           previous={previous?.face_scores ?? null}
-        />
-        <ScoreCard
-          title="体"
-          axes={BODY_AXES}
-          current={report.body_scores}
-          previous={previous?.body_scores ?? null}
         />
       </div>
     </>

@@ -14,7 +14,7 @@ export default async function AdminPage({
 }) {
   const staff = await getCurrentStaff();
   if (!staff) redirect('/login');
-  if (staff.role === 'staff') redirect('/');
+  if (staff.role === 'staff' || staff.role === 'store') redirect('/');
 
   const supabase = createClient();
   const month = searchParams.month ?? todayISO().slice(0, 7);

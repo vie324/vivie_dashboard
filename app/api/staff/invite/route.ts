@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const allowedRoles = ['admin', 'manager', 'staff'];
+  const allowedRoles = ['admin', 'manager', 'staff', 'store'];
   if (!allowedRoles.includes(role)) {
     return NextResponse.json({ error: '不正な役割です' }, { status: 400 });
   }

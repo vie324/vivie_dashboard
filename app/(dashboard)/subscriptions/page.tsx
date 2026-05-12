@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +13,9 @@ import { formatDate, formatYen } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
 export default async function SubscriptionsPage() {
+  const staff = await getCurrentStaff();
+  if (!staff) redirect('/login');
+  if (staff.role === 'store') redirect('/');
   const supabase = createClient();
 
   const [{ data: subs }, { data: plans }] = await Promise.all([

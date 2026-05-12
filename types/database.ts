@@ -1,7 +1,7 @@
 // Vivie Dashboard - Supabase 型定義
 // supabase/migrations/20260509000001_init.sql と同期
 
-export type StaffRole = 'admin' | 'manager' | 'staff';
+export type StaffRole = 'admin' | 'manager' | 'staff' | 'store';
 export type MemberSource = 'square' | 'manual';
 export type MemberStatus = 'active' | 'paused' | 'cancelled' | 'lead';
 export type CashbookType = 'income' | 'expense' | 'adjustment';

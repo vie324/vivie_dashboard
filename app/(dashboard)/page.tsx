@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar } from '@/components/ui/avatar';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
+import { StoreHome } from '@/components/dashboard/store-home';
 import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
 import { formatYen, formatDate, todayISO } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
@@ -26,6 +27,39 @@ export default async function DashboardHome() {
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
+
+  // 店舗ロール (iPad / 店舗 PC) は専用のシンプルなトップを表示
+  if (staff.role === 'store') {
+    const [{ data: todayReservations }, { data: expiringTickets }] = await Promise.all([
+      supabase
+        .from('reservation_overview')
+        .select(
+          'id, customer_name, member_full_name, member_picture, reservation_at, duration_minutes, menu, source, status, staff_name',
+        )
+        .gte('reservation_at', todayStart.toISOString())
+        .lte('reservation_at', todayEnd.toISOString())
+        .neq('status', 'cancelled')
+        .neq('status', 'no_show')
+        .order('reservation_at', { ascending: true }),
+      supabase
+        .from('ticket_overview')
+        .select(
+          'id, member_id, member_name, plan_name, remaining_count, total_count, expires_at, days_until_expiry',
+        )
+        .eq('effective_status', 'active')
+        .lte('days_until_expiry', 30)
+        .gte('days_until_expiry', 0)
+        .order('days_until_expiry', { ascending: true })
+        .limit(8),
+    ]);
+    return (
+      <StoreHome
+        staff={staff}
+        todayReservations={(todayReservations ?? []) as any[]}
+        expiringTickets={(expiringTickets ?? []) as any[]}
+      />
+    );
+  }
 
   const [
     membersRes,

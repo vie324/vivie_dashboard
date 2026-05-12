@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -15,6 +16,8 @@ export const dynamic = 'force-dynamic';
 export default async function ReportsPage() {
   const staff = await getCurrentStaff();
   if (!staff) return null;
+  // 店舗アカウントは日報 (個人別) にアクセス不可
+  if (staff.role === 'store') redirect('/');
   const supabase = createClient();
 
   const monthStart = todayISO().slice(0, 7) + '-01';

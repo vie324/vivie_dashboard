@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const staff = await getCurrentStaff();
   if (!staff) redirect('/login');
-  if (staff.role === 'staff') redirect('/');
+  if (staff.role === 'staff' || staff.role === 'store') redirect('/');
 
   const supabase = createClient();
   const [{ data: stores }, { data: allStaff }, { data: counselingSettings }] = await Promise.all([

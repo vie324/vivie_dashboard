@@ -86,7 +86,7 @@ export function buildFollowupFlex(args: BuildArgs) {
             layout: 'vertical',
             flex: 1,
             contents: [
-              { type: 'text', text: '肌', size: 'xxs', color: '#888' },
+              { type: 'text', text: '肌', size: 'xxs', color: '#888888' },
               {
                 type: 'text',
                 text: `${skin}/5`,
@@ -101,7 +101,7 @@ export function buildFollowupFlex(args: BuildArgs) {
             layout: 'vertical',
             flex: 1,
             contents: [
-              { type: 'text', text: '顔', size: 'xxs', color: '#888' },
+              { type: 'text', text: '顔', size: 'xxs', color: '#888888' },
               {
                 type: 'text',
                 text: `${face}/5`,
@@ -186,7 +186,7 @@ export function buildFollowupFlex(args: BuildArgs) {
                     type: 'text',
                     text: fmtYen(offer.original_price),
                     size: 'xs',
-                    color: '#aaa',
+                    color: '#AAAAAA',
                     decoration: 'line-through',
                     flex: 0,
                   },
@@ -221,7 +221,7 @@ export function buildFollowupFlex(args: BuildArgs) {
                 type: 'text',
                 text: `⏰ ${fmtDate(offer.expires_at)}`,
                 size: 'xs',
-                color: '#888',
+                color: '#888888',
                 margin: 'sm',
               },
             ]
@@ -232,7 +232,7 @@ export function buildFollowupFlex(args: BuildArgs) {
                 type: 'text',
                 text: offer.notes,
                 size: 'xxs',
-                color: '#888',
+                color: '#888888',
                 wrap: true,
                 margin: 'sm',
               },
