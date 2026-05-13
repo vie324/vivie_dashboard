@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/server';
 import { CounselingForm } from '@/components/counseling/counseling-form';
 import { ToastProvider } from '@/components/ui/toast';
 import { LogoIcon } from '@/components/ui/logo';
@@ -11,7 +11,11 @@ export default async function PublicCounselingPage({
 }: {
   params: { storeId: string };
 }) {
-  const supabase = createClient();
+  // 公開フォームは匿名アクセス。stores テーブルの RLS が authenticated のみ
+  // SELECT 許可になっているため、cookie セッションの createClient だと
+  // ログインしていないお客様は store が null になり notFound() に飛んで
+  // 404 ページが出ていた。service role で RLS をバイパスして取得する。
+  const supabase = createServiceClient();
   const [{ data: store }, { data: settings }] = await Promise.all([
     supabase
       .from('stores')

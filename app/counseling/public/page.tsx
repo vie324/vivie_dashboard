@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/server';
 import { LogoIcon } from '@/components/ui/logo';
 import { ChevronRight } from 'lucide-react';
 
@@ -8,7 +8,9 @@ export const dynamic = 'force-dynamic';
 // LINE 内蔵ブラウザのキャッシュなどで storeId が脱落して
 // /counseling/public/ に直接来ても店舗を選択できるようにする
 export default async function PublicCounselingIndexPage() {
-  const supabase = createClient();
+  // 匿名アクセス前提なので、RLS をバイパスする service role で取得する
+  // (cookie セッションの createClient だと anon ロールで stores が読めず空配列になる)
+  const supabase = createServiceClient();
   const { data: stores } = await supabase
     .from('stores')
     .select('id, name')
