@@ -48,6 +48,7 @@ export type InboundEmailStatus =
   | 'unmatched'
   | 'duplicate'
   | 'error';
+export type StockMovementKind = 'in' | 'out' | 'adjust';
 
 // =====================================================
 // Table Row 型
@@ -490,6 +491,31 @@ export type CounselingSettings = {
   updated_at: string;
 };
 
+export type Product = {
+  id: string;
+  name: string;
+  category: string | null;
+  sku: string | null;
+  unit_price: number;
+  cost_price: number;
+  current_stock: number;
+  low_stock_threshold: number;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StockMovement = {
+  id: string;
+  product_id: string;
+  kind: StockMovementKind;
+  quantity: number;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 // =====================================================
 // View Row 型 (読み取り専用)
 // =====================================================
@@ -610,6 +636,8 @@ export interface Database {
       gmail_integration_settings: TableDef<GmailIntegrationSettings>;
       inbound_emails: TableDef<InboundEmail>;
       counseling_settings: TableDef<CounselingSettings>;
+      products: TableDef<Product>;
+      stock_movements: TableDef<StockMovement>;
     };
     Views: {
       line_conversations: ViewDef<LineConversation>;
@@ -642,6 +670,7 @@ export interface Database {
       reservation_source: ReservationSource;
       reservation_status: ReservationStatus;
       inbound_email_status: InboundEmailStatus;
+      stock_movement_kind: StockMovementKind;
     };
     CompositeTypes: Record<string, never>;
   };

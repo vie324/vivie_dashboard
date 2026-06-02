@@ -22,6 +22,7 @@ import {
   Ticket,
   CalendarDays,
   Scan,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -64,6 +65,7 @@ const navGroups: NavGroup[] = [
       { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
       { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
       { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
+      { href: '/inventory', label: '在庫', icon: Package, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
       { href: '/goals', label: '目標管理', icon: Target },
       { href: '/attendance', label: '勤怠', icon: MapPin },
