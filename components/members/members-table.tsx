@@ -24,8 +24,6 @@ interface MemberRow extends Member {
     last_visit_date: string | null;
     total_spend: number;
   } | null;
-  line_picture_url?: string | null;
-  line_display_name?: string | null;
 }
 
 const statusTone: Record<MemberStatus, 'green' | 'amber' | 'red' | 'blue'> = {

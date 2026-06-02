@@ -212,7 +212,7 @@ export async function POST() {
             if (!member) continue;
 
             let planRowId: string | null = null;
-            const planSquareId = s.planVariationId || s.planId;
+            const planSquareId = s.planVariationId;
             if (planSquareId) {
               const { data: plan } = await supabase
                 .from('subscription_plans')

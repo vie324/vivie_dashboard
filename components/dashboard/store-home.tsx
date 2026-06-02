@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
 import {
+  type LucideIcon,
   CalendarDays,
   Users,
   ClipboardList,
@@ -19,7 +20,7 @@ type QuickAction = {
   href: string;
   label: string;
   description: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   tone: 'rose' | 'amber' | 'blue' | 'green' | 'violet';
 };
 

@@ -55,8 +55,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           sizeClass[size],
         )}
       >
-        {(title || onClose) && (
-          <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
             <div className="min-w-0 flex-1">
               {title && <h2 className="font-serif text-lg font-semibold text-ink-900">{title}</h2>}
               {description && (
@@ -70,8 +69,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             >
               <X size={18} />
             </button>
-          </div>
-        )}
+        </div>
         {children && <div className="px-5 py-4">{children}</div>}
         {footer && (
           <div className="flex justify-end gap-2 border-t border-ink-100 bg-ink-50/40 px-5 py-3">

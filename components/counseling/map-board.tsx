@@ -16,7 +16,6 @@ function FitBounds({ points }: { points: MapPoint[] }) {
   if (points.length > 0) {
     try {
       const bounds = points.map((p) => [p.geo_lat, p.geo_lng] as [number, number]);
-      // @ts-expect-error - LatLngBoundsLike
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     } catch {}
   }

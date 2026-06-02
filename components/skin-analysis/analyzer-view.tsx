@@ -206,6 +206,7 @@ export function SkinAnalyzerView() {
           <Loader2 className="mx-auto h-10 w-10 animate-spin text-vivie-500" />
           <p className="text-sm text-ink-600">画像を解析しています…</p>
           {imageDataUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageDataUrl}
               alt="解析中"
@@ -224,6 +225,7 @@ export function SkinAnalyzerView() {
         <Card>
           <CardContent className="flex items-center gap-4 p-5">
             {imageDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imageDataUrl}
                 alt="解析画像"

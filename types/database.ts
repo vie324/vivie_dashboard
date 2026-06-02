@@ -1,14 +1,58 @@
 // Vivie Dashboard - Supabase 型定義
-// supabase/migrations/20260509000001_init.sql と同期
+// supabase/migrations/*.sql と同期 (手書き。理想は `supabase gen types typescript`)
+//
+// 重要: 各テーブルの Row は interface ではなく type で定義する。
+// interface は暗黙の index signature を持たないため Supabase の
+// `GenericTable extends Record<string, unknown>` 制約を満たせず、
+// from('table') の戻り値が never に潰れる。type 別名はこの制約を満たす。
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+// jsonb カラム用。実運用ではキーが動的なため緩めに扱う。
+type JsonObject = { [key: string]: any };
+
+// =====================================================
+// Enums
+// =====================================================
 export type StaffRole = 'admin' | 'manager' | 'staff' | 'store';
 export type MemberSource = 'square' | 'manual';
 export type MemberStatus = 'active' | 'paused' | 'cancelled' | 'lead';
 export type CashbookType = 'income' | 'expense' | 'adjustment';
 export type CashbookSource = 'cash' | 'square' | 'bank' | 'online' | 'other';
 export type AttendanceKind = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+export type ReservationSource =
+  | 'hpb'
+  | 'minimo'
+  | 'phone'
+  | 'direct'
+  | 'line'
+  | 'instagram'
+  | 'threads'
+  | 'other';
+export type ReservationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show';
+export type InboundEmailStatus =
+  | 'received'
+  | 'parsed'
+  | 'matched'
+  | 'unmatched'
+  | 'duplicate'
+  | 'error';
 
-export interface Store {
+// =====================================================
+// Table Row 型
+// =====================================================
+export type Store = {
   id: string;
   name: string;
   address: string | null;
@@ -17,11 +61,12 @@ export interface Store {
   radius_meters: number;
   square_location_id: string | null;
   is_active: boolean;
+  business_hours: JsonObject | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface Staff {
+export type Staff = {
   id: string;
   display_name: string;
   email: string;
@@ -31,9 +76,14 @@ export interface Staff {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface Member {
+export type StaffStore = {
+  staff_id: string;
+  store_id: string;
+};
+
+export type Member = {
   id: string;
   source: MemberSource;
   square_customer_id: string | null;
@@ -48,11 +98,14 @@ export interface Member {
   primary_store_id: string | null;
   notes: string | null;
   joined_at: string | null;
+  line_user_id: string | null;
+  line_display_name: string | null;
+  line_picture_url: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface SubscriptionPlan {
+export type SubscriptionPlan = {
   id: string;
   square_plan_id: string | null;
   name: string;
@@ -62,9 +115,9 @@ export interface SubscriptionPlan {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface MemberSubscription {
+export type MemberSubscription = {
   id: string;
   member_id: string;
   plan_id: string | null;
@@ -75,9 +128,9 @@ export interface MemberSubscription {
   cancelled_at: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface Visit {
+export type Visit = {
   id: string;
   member_id: string | null;
   store_id: string;
@@ -89,9 +142,9 @@ export interface Visit {
   amount: number | null;
   notes: string | null;
   created_at: string;
-}
+};
 
-export interface CounselingRecord {
+export type CounselingRecord = {
   id: string;
   store_id: string | null;
   member_id: string | null;
@@ -118,10 +171,27 @@ export interface CounselingRecord {
   reviewed_by: string | null;
   reviewed_at: string | null;
   internal_notes: string | null;
+  // 20260509000010 マーケ・契約分析
+  assigned_staff_id: string | null;
+  assigned_staff_name: string | null;
+  acquisition_channel: string | null;
+  closing_status: string | null;
+  closing_status_raw: string | null;
+  next_reservation_date: string | null;
+  no_contract_reason: string | null;
+  contract_reason: string | null;
+  contract_plan: string | null;
+  imported: boolean;
+  // 20260509000011 ジオコーディング
+  geo_lat: number | null;
+  geo_lng: number | null;
+  geo_source: string | null;
+  geo_attempted_at: string | null;
+  geo_error: string | null;
   created_at: string;
-}
+};
 
-export interface CashbookEntry {
+export type CashbookEntry = {
   id: string;
   store_id: string;
   entry_date: string;
@@ -135,9 +205,9 @@ export interface CashbookEntry {
   recorded_by: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface DailyReport {
+export type DailyReport = {
   id: string;
   store_id: string;
   staff_id: string;
@@ -148,6 +218,8 @@ export interface DailyReport {
   meta_contract_count: number;
   referral_new_count: number;
   referral_contract_count: number;
+  minimo_new_count: number;
+  minimo_contract_count: number;
   existing_treatment_count: number;
   repeat_count: number;
   total_sales: number;
@@ -158,9 +230,9 @@ export interface DailyReport {
   submitted_at: string;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface AttendanceLog {
+export type AttendanceLog = {
   id: string;
   staff_id: string;
   store_id: string;
@@ -169,73 +241,395 @@ export interface AttendanceLog {
   latitude: number;
   longitude: number;
   distance_meters: number;
-  device_info: Record<string, unknown> | null;
+  device_info: JsonObject | null;
   created_at: string;
-}
+};
+
+export type TreatmentReport = {
+  id: string;
+  member_id: string;
+  store_id: string;
+  staff_id: string | null;
+  treatment_date: string;
+  menu: string | null;
+  duration_minutes: number | null;
+  amount: number | null;
+  skin_scores: JsonObject;
+  face_scores: JsonObject;
+  body_scores: JsonObject;
+  before_photo_path: string | null;
+  after_photo_path: string | null;
+  observations: string | null;
+  next_recommendation: string | null;
+  is_first_visit: boolean;
+  contracted: boolean;
+  followup_offer: JsonObject | null;
+  line_sent_at: string | null;
+  line_request_id: string | null;
+  line_send_status: string | null;
+  line_send_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LineEvent = {
+  id: string;
+  event_type: string;
+  line_user_id: string | null;
+  display_name: string | null;
+  picture_url: string | null;
+  message_text: string | null;
+  raw: JsonObject | null;
+  member_id: string | null;
+  received_at: string;
+};
+
+export type LineMessage = {
+  id: string;
+  line_user_id: string;
+  member_id: string | null;
+  direction: 'inbound' | 'outbound';
+  message_type: string;
+  message_text: string | null;
+  content: JsonObject | null;
+  line_message_id: string | null;
+  sent_by: string | null;
+  sent_at: string;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type Tag = {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+};
+
+export type MemberTag = {
+  member_id: string;
+  tag_id: string;
+  added_at: string;
+};
+
+export type LineTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  category: string | null;
+  shortcut: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CashbookCategory = {
+  id: string;
+  name: string;
+  entry_type: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  entity: string | null;
+  entity_id: string | null;
+  details: JsonObject | null;
+  created_at: string;
+};
+
+export type TreatmentMenu = {
+  id: string;
+  name: string;
+  category: string | null;
+  duration_minutes: number | null;
+  price: number | null;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+};
+
+export type LineConversationMeta = {
+  line_user_id: string;
+  status: string;
+  pinned: boolean;
+  assignee_id: string | null;
+  internal_notes: string | null;
+  last_handled_at: string | null;
+  last_handled_by: string | null;
+  updated_at: string;
+};
+
+export type MonthlyGoal = {
+  id: string;
+  store_id: string | null;
+  goal_month: string;
+  hpb_new_target: number;
+  meta_new_target: number;
+  minimo_new_target: number;
+  referral_new_target: number;
+  contract_target: number;
+  sales_target: number;
+  repeat_rate_target: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TicketPlan = {
+  id: string;
+  name: string;
+  total_count: number;
+  price: number;
+  validity_months: number;
+  is_active: boolean;
+  display_order: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Ticket = {
+  id: string;
+  member_id: string;
+  plan_id: string | null;
+  store_id: string | null;
+  plan_name: string;
+  total_count: number;
+  used_count: number;
+  price: number;
+  purchased_at: string;
+  expires_at: string;
+  status: string;
+  notes: string | null;
+  sold_by: string | null;
+  refunded_at: string | null;
+  refunded_by: string | null;
+  refund_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TicketUsage = {
+  id: string;
+  ticket_id: string;
+  used_at: string;
+  used_by_staff: string | null;
+  treatment_report_id: string | null;
+  menu: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type Reservation = {
+  id: string;
+  member_id: string | null;
+  customer_name: string;
+  customer_furigana: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  source: ReservationSource;
+  source_label: string | null;
+  external_id: string | null;
+  reservation_at: string;
+  duration_minutes: number;
+  menu: string | null;
+  amount: number | null;
+  staff_id: string | null;
+  store_id: string;
+  status: ReservationStatus;
+  notes: string | null;
+  source_data: JsonObject | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GmailIntegrationSettings = {
+  id: string;
+  email_address: string | null;
+  refresh_token: string | null;
+  history_id: string | null;
+  watch_expiration: string | null;
+  label_ids: string[] | null;
+  is_active: boolean;
+  last_received_at: string | null;
+  last_error: string | null;
+  connected_by: string | null;
+  connected_at: string | null;
+  updated_at: string;
+};
+
+export type InboundEmail = {
+  id: string;
+  message_id: string | null;
+  thread_id: string | null;
+  sender: string | null;
+  subject: string | null;
+  received_at: string;
+  body_snippet: string | null;
+  body_text: string | null;
+  parser_used: string | null;
+  parsed_data: JsonObject | null;
+  status: InboundEmailStatus;
+  reservation_id: string | null;
+  error_message: string | null;
+  created_at: string;
+};
+
+export type CounselingSettings = {
+  id: string;
+  disclaimer: string | null;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+// =====================================================
+// View Row 型 (読み取り専用)
+// =====================================================
+export type LineConversation = {
+  line_user_id: string;
+  member_id: string | null;
+  member_name: string | null;
+  line_display_name: string | null;
+  line_picture_url: string | null;
+  last_message: string | null;
+  last_message_type: string | null;
+  last_direction: string | null;
+  last_sent_at: string | null;
+  status: string;
+  pinned: boolean;
+  assignee_id: string | null;
+  last_handled_at: string | null;
+  unread_count: number | null;
+};
+
+export type MemberStats = {
+  member_id: string;
+  total_visits: number | null;
+  last_visit_date: string | null;
+  total_spend: number | null;
+  active_subscriptions: number | null;
+};
+
+export type AttendanceDaily = {
+  staff_id: string | null;
+  store_id: string | null;
+  work_date: string | null;
+  clock_in_at: string | null;
+  clock_out_at: string | null;
+  gross_minutes: number | null;
+  break_starts: number | null;
+  break_ends: number | null;
+};
+
+export type CounselingMarketingSummary = {
+  acquisition_channel: string | null;
+  total: number | null;
+  contracted: number | null;
+  contract_rate: number | null;
+};
+
+export type CounselingStaffSummary = {
+  staff_name: string | null;
+  raw_name: string | null;
+  total: number | null;
+  contracted: number | null;
+  contract_rate: number | null;
+};
+
+export type TicketOverview = Ticket & {
+  member_name: string | null;
+  line_user_id: string | null;
+  line_picture_url: string | null;
+  store_name: string | null;
+  remaining_count: number | null;
+  days_until_expiry: number | null;
+  effective_status: string;
+};
+
+export type ReservationOverview = Reservation & {
+  end_at: string | null;
+  member_full_name: string | null;
+  member_picture: string | null;
+  member_phone: string | null;
+  staff_name: string | null;
+  store_name: string | null;
+};
+
+// =====================================================
+// Supabase Database 型
+// =====================================================
+type TableDef<Row> = {
+  Row: Row;
+  Insert: Partial<Row>;
+  Update: Partial<Row>;
+  Relationships: [];
+};
+
+type ViewDef<Row> = {
+  Row: Row;
+  Relationships: [];
+};
 
 export interface Database {
   public: {
     Tables: {
-      stores: {
-        Row: Store;
-        Insert: Partial<Store> & Pick<Store, 'name'>;
-        Update: Partial<Store>;
-      };
-      staff: {
-        Row: Staff;
-        Insert: Partial<Staff> & Pick<Staff, 'id' | 'display_name' | 'email'>;
-        Update: Partial<Staff>;
-      };
-      staff_stores: {
-        Row: { staff_id: string; store_id: string };
-        Insert: { staff_id: string; store_id: string };
-        Update: Partial<{ staff_id: string; store_id: string }>;
-      };
-      members: {
-        Row: Member;
-        Insert: Partial<Member> & Pick<Member, 'full_name'>;
-        Update: Partial<Member>;
-      };
-      subscription_plans: {
-        Row: SubscriptionPlan;
-        Insert: Partial<SubscriptionPlan> & Pick<SubscriptionPlan, 'name'>;
-        Update: Partial<SubscriptionPlan>;
-      };
-      member_subscriptions: {
-        Row: MemberSubscription;
-        Insert: Partial<MemberSubscription> & Pick<MemberSubscription, 'member_id' | 'status'>;
-        Update: Partial<MemberSubscription>;
-      };
-      visits: {
-        Row: Visit;
-        Insert: Partial<Visit> & Pick<Visit, 'store_id' | 'visit_date'>;
-        Update: Partial<Visit>;
-      };
-      counseling_records: {
-        Row: CounselingRecord;
-        Insert: Partial<CounselingRecord> & Pick<CounselingRecord, 'full_name' | 'phone'>;
-        Update: Partial<CounselingRecord>;
-      };
-      cashbook_entries: {
-        Row: CashbookEntry;
-        Insert: Partial<CashbookEntry> &
-          Pick<CashbookEntry, 'store_id' | 'entry_date' | 'entry_type' | 'category' | 'amount'>;
-        Update: Partial<CashbookEntry>;
-      };
-      daily_reports: {
-        Row: DailyReport;
-        Insert: Partial<DailyReport> &
-          Pick<DailyReport, 'store_id' | 'staff_id' | 'report_date'>;
-        Update: Partial<DailyReport>;
-      };
-      attendance_logs: {
-        Row: AttendanceLog;
-        Insert: Partial<AttendanceLog> &
-          Pick<
-            AttendanceLog,
-            'staff_id' | 'store_id' | 'kind' | 'latitude' | 'longitude' | 'distance_meters'
-          >;
-        Update: Partial<AttendanceLog>;
+      stores: TableDef<Store>;
+      staff: TableDef<Staff>;
+      staff_stores: TableDef<StaffStore>;
+      members: TableDef<Member>;
+      subscription_plans: TableDef<SubscriptionPlan>;
+      member_subscriptions: TableDef<MemberSubscription>;
+      visits: TableDef<Visit>;
+      counseling_records: TableDef<CounselingRecord>;
+      cashbook_entries: TableDef<CashbookEntry>;
+      cashbook_categories: TableDef<CashbookCategory>;
+      daily_reports: TableDef<DailyReport>;
+      attendance_logs: TableDef<AttendanceLog>;
+      treatment_reports: TableDef<TreatmentReport>;
+      treatment_menus: TableDef<TreatmentMenu>;
+      line_events: TableDef<LineEvent>;
+      line_messages: TableDef<LineMessage>;
+      line_templates: TableDef<LineTemplate>;
+      line_conversation_meta: TableDef<LineConversationMeta>;
+      tags: TableDef<Tag>;
+      member_tags: TableDef<MemberTag>;
+      audit_logs: TableDef<AuditLog>;
+      monthly_goals: TableDef<MonthlyGoal>;
+      ticket_plans: TableDef<TicketPlan>;
+      tickets: TableDef<Ticket>;
+      ticket_usages: TableDef<TicketUsage>;
+      reservations: TableDef<Reservation>;
+      gmail_integration_settings: TableDef<GmailIntegrationSettings>;
+      inbound_emails: TableDef<InboundEmail>;
+      counseling_settings: TableDef<CounselingSettings>;
+    };
+    Views: {
+      line_conversations: ViewDef<LineConversation>;
+      member_stats: ViewDef<MemberStats>;
+      attendance_daily: ViewDef<AttendanceDaily>;
+      counseling_marketing_summary: ViewDef<CounselingMarketingSummary>;
+      counseling_staff_summary: ViewDef<CounselingStaffSummary>;
+      ticket_overview: ViewDef<TicketOverview>;
+      reservation_overview: ViewDef<ReservationOverview>;
+    };
+    Functions: {
+      use_ticket: {
+        Args: {
+          p_ticket_id: string;
+          p_staff_id?: string | null;
+          p_treatment_report_id?: string | null;
+          p_menu?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: Json;
       };
     };
     Enums: {
@@ -245,6 +639,10 @@ export interface Database {
       cashbook_type: CashbookType;
       cashbook_source: CashbookSource;
       attendance_kind: AttendanceKind;
+      reservation_source: ReservationSource;
+      reservation_status: ReservationStatus;
+      inbound_email_status: InboundEmailStatus;
     };
+    CompositeTypes: Record<string, never>;
   };
 }

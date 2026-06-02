@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  type LucideIcon,
   LayoutDashboard,
   Users,
   ClipboardList,
@@ -30,7 +31,7 @@ import type { Staff } from '@/types/database';
 interface NavItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   showBadge?: boolean;
   // 店舗ロール (iPad / 店舗 PC) でも表示する項目
   storeAllowed?: boolean;

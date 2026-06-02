@@ -9,14 +9,8 @@ const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '4mb' },
   },
-  // Supabase の partial select で型推論が `never` になるケースが多いため、
-  // 一旦ビルドを通す目的でエラーを警告化。実行時の動作には影響しない。
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // 型エラー / Lint エラーはビルドで検出する (旧: ignoreBuildErrors はスキーマ型を
+  // 完全化したうえで撤廃済み)。
   // 公開カウンセリングフォームは LINE 内蔵ブラウザのキャッシュで
   // 404 などが残ると詰むため、CDN / ブラウザ双方でキャッシュさせない
   async headers() {
