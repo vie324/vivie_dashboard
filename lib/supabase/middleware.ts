@@ -6,6 +6,9 @@ const PUBLIC_PATHS = [
   '/login',
   '/auth',
   '/counseling/public',
+  // 自社オンライン予約 (匿名でアクセス・予約)
+  '/book',
+  '/api/book',
   // /staff/* 配下は全てトークン認証なので公開扱い
   '/staff/',
   '/api/staff/',
