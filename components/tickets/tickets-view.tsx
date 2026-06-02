@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Input, Select } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Ticket, Search, AlertTriangle, CheckCheck, Clock } from 'lucide-react';
+import { Ticket, Search, AlertTriangle, CheckCheck, Clock, MessageCircle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { formatDate, formatYen } from '@/lib/utils';
 
 type EffectiveStatus = 'active' | 'used_up' | 'expired' | 'refunded';
@@ -15,6 +17,7 @@ interface TicketRow {
   id: string;
   member_id: string;
   member_name: string | null;
+  line_user_id: string | null;
   line_picture_url: string | null;
   plan_name: string;
   total_count: number;
@@ -48,8 +51,43 @@ interface Props {
 }
 
 export function TicketsView({ tickets }: Props) {
+  const toast = useToast();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EffectiveStatus | 'expiring_soon'>('all');
+  const [reminding, setReminding] = useState<string | null>(null);
+  const [reminded, setReminded] = useState<Set<string>>(new Set());
+
+  // 失効間近 (30日以内) または残数が少ない (2回以下) 有効券
+  const alerts = useMemo(
+    () =>
+      tickets
+        .filter(
+          (t) =>
+            t.effective_status === 'active' &&
+            (t.days_until_expiry <= 30 || t.remaining_count <= 2),
+        )
+        .sort((a, b) => a.days_until_expiry - b.days_until_expiry),
+    [tickets],
+  );
+
+  async function remind(ticketId: string) {
+    setReminding(ticketId);
+    try {
+      const res = await fetch('/api/tickets/remind', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ticket_id: ticketId }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || '送信に失敗しました');
+      setReminded((s) => new Set(s).add(ticketId));
+      toast.show('LINE を送信しました', 'success');
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : '送信に失敗しました', 'error');
+    } finally {
+      setReminding(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -92,6 +130,53 @@ export function TicketsView({ tickets }: Props) {
         />
         <Stat label="残回数 合計" value={stats.totalRemaining} icon={<Clock size={16} />} tone="rose" />
       </div>
+
+      {alerts.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-700">
+              <AlertTriangle size={16} />
+              失効・残数アラート ({alerts.length})
+            </div>
+            <ul className="divide-y divide-ink-100">
+              {alerts.map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/members/${t.member_id}`}
+                      className="text-sm font-medium hover:text-vivie-600"
+                    >
+                      {t.member_name ?? '—'}
+                    </Link>
+                    <p className="text-xs text-ink-500">
+                      {t.plan_name}・残 {t.remaining_count} 回・期限 {formatDate(t.expires_at)}
+                      {t.days_until_expiry <= 30 &&
+                        `（あと ${Math.max(0, t.days_until_expiry)} 日）`}
+                    </p>
+                  </div>
+                  {t.line_user_id ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={reminding === t.id || reminded.has(t.id)}
+                      onClick={() => remind(t.id)}
+                    >
+                      {reminding === t.id ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <MessageCircle size={12} />
+                      )}
+                      {reminded.has(t.id) ? '送信済' : 'LINEで通知'}
+                    </Button>
+                  ) : (
+                    <span className="shrink-0 text-[10px] text-ink-400">LINE 未連携</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">

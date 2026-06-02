@@ -40,6 +40,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'ticket.issue': '回数券 発行',
   'ticket.refund': '回数券 返金',
   'ticket.use': '回数券 使用',
+  'ticket.remind': '回数券 リマインド',
   'member.create': '会員 登録',
   'member.update': '会員 編集',
   'cashbook.update': '出納 編集',
