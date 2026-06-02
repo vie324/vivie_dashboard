@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { Input, Select } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/empty-state';
+import { CsvExportButton } from '@/components/ui/csv-export-button';
+import type { CsvColumn } from '@/lib/csv';
 import { formatDate, formatYen } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import type { Member, MemberStatus } from '@/types/database';
@@ -47,6 +49,20 @@ const tagColorClass: Record<string, string> = {
   violet: 'bg-violet-100 text-violet-700',
   red: 'bg-red-100 text-red-700',
 };
+
+const memberCsvColumns: CsvColumn<MemberRow>[] = [
+  { key: 'full_name', label: '氏名' },
+  { key: 'furigana', label: 'フリガナ' },
+  { key: 'status', label: 'ステータス', value: (m) => statusLabel[m.status] },
+  { key: 'phone', label: '電話' },
+  { key: 'email', label: 'メール' },
+  { key: 'source', label: 'ソース' },
+  { key: 'joined_at', label: '入会日' },
+  { key: 'store', label: '店舗', value: (m) => m.primary_store?.name ?? '' },
+  { key: 'total_visits', label: '来店回数', value: (m) => m.stats?.total_visits ?? 0 },
+  { key: 'last_visit', label: '最終来店', value: (m) => m.stats?.last_visit_date ?? '' },
+  { key: 'total_spend', label: '累計利用額', value: (m) => m.stats?.total_spend ?? 0 },
+];
 
 export function MembersTable({ members }: { members: MemberRow[] }) {
   const [query, setQuery] = useState('');
@@ -128,6 +144,7 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
                 ))}
               </Select>
             )}
+            <CsvExportButton filename="members" rows={filtered} columns={memberCsvColumns} />
             <div className="inline-flex rounded-xl border border-ink-200 bg-white p-1">
               <button
                 onClick={() => setView('card')}
