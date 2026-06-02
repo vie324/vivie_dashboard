@@ -81,7 +81,7 @@ export function MemberTicketsPanel({ memberId, storeId, tickets, plans, isManage
     }
   }
 
-  async function useOne(ticketId: string) {
+  async function consumeOne(ticketId: string) {
     if (!confirm('1 回消費します。よろしいですか?')) return;
     setBusy(`use:${ticketId}`);
     try {
@@ -185,7 +185,7 @@ export function MemberTicketsPanel({ memberId, storeId, tickets, plans, isManage
                     <div className="flex flex-col gap-1.5 shrink-0">
                       {t.effective_status === 'active' && (
                         <Button
-                          onClick={() => useOne(t.id)}
+                          onClick={() => consumeOne(t.id)}
                           disabled={busy === `use:${t.id}`}
                           size="sm"
                           variant="primary"

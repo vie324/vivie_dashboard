@@ -25,6 +25,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${baseUrl}/login`);
   }
 
+  if (!process.env.GOOGLE_OAUTH_CLIENT_ID || !process.env.GOOGLE_OAUTH_CLIENT_SECRET) {
+    return NextResponse.redirect(
+      `${baseUrl}/settings/gmail?error=${encodeURIComponent('Gmail OAuth が未設定です (GOOGLE_OAUTH_CLIENT_ID / SECRET)')}`,
+    );
+  }
+
   // code を refresh_token に交換
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',

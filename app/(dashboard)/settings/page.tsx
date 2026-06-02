@@ -9,6 +9,7 @@ import { StaffInviteForm } from '@/components/settings/staff-invite-form';
 import { CounselingSettings } from '@/components/settings/counseling-settings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getAppUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,7 +108,7 @@ export default async function SettingsPage() {
           />
           <Row
             label="Webhook URL"
-            value={`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/square/webhook`}
+            value={`${getAppUrl()}/api/square/webhook`}
           />
         </CardContent>
       </Card>

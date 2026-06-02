@@ -48,6 +48,17 @@ export function generateToken(): string {
     .join('');
 }
 
+// アプリの公開 URL を解決する。本番で NEXT_PUBLIC_APP_URL 未設定でも
+// Vercel の自動 URL / クライアントの origin にフォールバックして
+// localhost への誤リダイレクト・壊れた共有 URL を防ぐ。
+export function getAppUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '');
+  if (explicit) return explicit;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:3000';
+}
+
 // 「苗字 名前」順で連結
 export function joinJaName(
   familyName?: string | null,

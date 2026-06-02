@@ -7,6 +7,7 @@ import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { Loader2 } from 'lucide-react';
+import type { MemberStatus } from '@/types/database';
 
 interface Props {
   stores: { id: string; name: string }[];
@@ -53,10 +54,11 @@ export function MemberForm({ stores, initial }: Props) {
       const supabase = createClient();
       const payload = {
         ...form,
-        source: 'manual',
+        source: 'manual' as const,
         birth_date: form.birth_date || null,
         primary_store_id: form.primary_store_id || null,
-      } as const;
+        status: form.status as MemberStatus,
+      };
       if (initial?.id) {
         const { error } = await supabase.from('members').update(payload).eq('id', initial.id);
         if (error) throw error;
