@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { logAudit } from '@/lib/audit';
 
 // 回数券を返金 (ステータスを refunded に)
 export async function POST(request: NextRequest) {
@@ -39,5 +40,12 @@ export async function POST(request: NextRequest) {
     })
     .eq('id', ticket_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await logAudit(supabase, {
+    action: 'ticket.refund',
+    entity: 'ticket',
+    entityId: ticket_id,
+    actorId: user.id,
+    details: { reason: reason || null },
+  });
   return NextResponse.json({ ok: true });
 }

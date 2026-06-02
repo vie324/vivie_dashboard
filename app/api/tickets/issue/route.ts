@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { logAudit } from '@/lib/audit';
 
 // 回数券を会員に発行
 export async function POST(request: NextRequest) {
@@ -86,5 +87,17 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await logAudit(supabase, {
+    action: 'ticket.issue',
+    entity: 'ticket',
+    entityId: (data as any).id,
+    actorId: user.id,
+    details: {
+      member_id,
+      plan_name: snapshot.plan_name,
+      total_count: snapshot.total_count,
+      price: snapshot.price,
+    },
+  });
   return NextResponse.json({ ok: true, ticket_id: (data as any).id });
 }

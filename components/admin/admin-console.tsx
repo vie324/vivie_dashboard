@@ -2,12 +2,13 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
-import { Wallet, MapPin, Link2, MessageCircle } from 'lucide-react';
+import { Wallet, MapPin, Link2, MessageCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CashbookAdmin } from './cashbook-admin';
 import { AttendanceAdmin } from './attendance-admin';
 import { StaffUrlAdmin } from './staff-url-admin';
 import { LineAdmin } from './line-admin';
+import { AuditLogView } from './audit-log-view';
 
 interface Props {
   currentTab: string;
@@ -16,6 +17,7 @@ interface Props {
   staff: any[];
   cashbook: any[];
   attendance: any[];
+  auditLogs: any[];
   canManageStaff: boolean;
 }
 
@@ -24,6 +26,7 @@ const tabs = [
   { key: 'attendance', label: '勤怠', icon: MapPin },
   { key: 'urls', label: 'スタッフ URL', icon: Link2 },
   { key: 'line', label: 'LINE 診断', icon: MessageCircle },
+  { key: 'audit', label: '操作ログ', icon: ShieldCheck },
 ];
 
 export function AdminConsole({
@@ -33,6 +36,7 @@ export function AdminConsole({
   staff,
   cashbook,
   attendance,
+  auditLogs,
   canManageStaff,
 }: Props) {
   const router = useRouter();
@@ -76,7 +80,7 @@ export function AdminConsole({
           })}
         </div>
 
-        {currentTab !== 'urls' && (
+        {currentTab !== 'urls' && currentTab !== 'audit' && (
           <Field label="月" className="sm:w-48">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
@@ -93,6 +97,7 @@ export function AdminConsole({
           )}
           {currentTab === 'urls' && <StaffUrlAdmin staff={staff} canManage={canManageStaff} />}
           {currentTab === 'line' && <LineAdmin />}
+          {currentTab === 'audit' && <AuditLogView logs={auditLogs} staff={staff} />}
         </CardContent>
       </Card>
     </div>

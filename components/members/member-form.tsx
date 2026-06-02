@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { Loader2 } from 'lucide-react';
 import type { MemberStatus } from '@/types/database';
+import { logAudit } from '@/lib/audit';
 
 interface Props {
   stores: { id: string; name: string }[];
@@ -62,10 +63,21 @@ export function MemberForm({ stores, initial }: Props) {
       if (initial?.id) {
         const { error } = await supabase.from('members').update(payload).eq('id', initial.id);
         if (error) throw error;
+        await logAudit(supabase, {
+          action: 'member.update',
+          entity: 'member',
+          entityId: initial.id,
+          details: { full_name: form.full_name },
+        });
         toast.show('更新しました', 'success');
       } else {
         const { error } = await supabase.from('members').insert(payload);
         if (error) throw error;
+        await logAudit(supabase, {
+          action: 'member.create',
+          entity: 'member',
+          details: { full_name: form.full_name },
+        });
         toast.show('会員を登録しました', 'success');
       }
       router.push('/members');

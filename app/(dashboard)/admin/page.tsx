@@ -26,6 +26,7 @@ export default async function AdminPage({
     { data: allStaff },
     { data: cashbook },
     { data: attendance },
+    { data: auditLogs },
   ] = await Promise.all([
     supabase.from('stores').select('id, name').eq('is_active', true).order('name'),
     supabase
@@ -47,6 +48,11 @@ export default async function AdminPage({
       .lte('clocked_at', `${end}T23:59:59`)
       .order('clocked_at', { ascending: false })
       .limit(2000),
+    supabase
+      .from('audit_logs')
+      .select('id, created_at, actor_id, actor_name, action, entity, entity_id, details')
+      .order('created_at', { ascending: false })
+      .limit(300),
   ]);
 
   return (
@@ -62,6 +68,7 @@ export default async function AdminPage({
         staff={(allStaff ?? []) as any}
         cashbook={(cashbook ?? []) as any}
         attendance={(attendance ?? []) as any}
+        auditLogs={(auditLogs ?? []) as any}
         canManageStaff={staff.role === 'admin'}
       />
     </div>
