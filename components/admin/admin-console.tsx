@@ -2,13 +2,14 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
-import { Wallet, MapPin, Link2, MessageCircle, ShieldCheck } from 'lucide-react';
+import { Wallet, MapPin, Link2, MessageCircle, ShieldCheck, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CashbookAdmin } from './cashbook-admin';
 import { AttendanceAdmin } from './attendance-admin';
 import { StaffUrlAdmin } from './staff-url-admin';
 import { LineAdmin } from './line-admin';
 import { AuditLogView } from './audit-log-view';
+import { StaffSalesView } from './staff-sales-view';
 
 interface Props {
   currentTab: string;
@@ -18,11 +19,13 @@ interface Props {
   cashbook: any[];
   attendance: any[];
   auditLogs: any[];
+  dailyReports: any[];
   canManageStaff: boolean;
 }
 
 const tabs = [
   { key: 'cashbook', label: '出納帳', icon: Wallet },
+  { key: 'staff-sales', label: 'スタッフ売上', icon: TrendingUp },
   { key: 'attendance', label: '勤怠', icon: MapPin },
   { key: 'urls', label: 'スタッフ URL', icon: Link2 },
   { key: 'line', label: 'LINE 診断', icon: MessageCircle },
@@ -37,6 +40,7 @@ export function AdminConsole({
   cashbook,
   attendance,
   auditLogs,
+  dailyReports,
   canManageStaff,
 }: Props) {
   const router = useRouter();
@@ -91,6 +95,9 @@ export function AdminConsole({
         <CardContent className="p-0">
           {currentTab === 'cashbook' && (
             <CashbookAdmin entries={cashbook} stores={stores} staff={staff} />
+          )}
+          {currentTab === 'staff-sales' && (
+            <StaffSalesView reports={dailyReports} staff={staff} />
           )}
           {currentTab === 'attendance' && (
             <AttendanceAdmin logs={attendance} stores={stores} staff={staff} />
