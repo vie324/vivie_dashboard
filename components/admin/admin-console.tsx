@@ -2,12 +2,14 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/input';
-import { Wallet, MapPin, Link2, MessageCircle } from 'lucide-react';
+import { Wallet, MapPin, Link2, MessageCircle, ShieldCheck, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CashbookAdmin } from './cashbook-admin';
 import { AttendanceAdmin } from './attendance-admin';
 import { StaffUrlAdmin } from './staff-url-admin';
 import { LineAdmin } from './line-admin';
+import { AuditLogView } from './audit-log-view';
+import { StaffSalesView } from './staff-sales-view';
 
 interface Props {
   currentTab: string;
@@ -16,14 +18,18 @@ interface Props {
   staff: any[];
   cashbook: any[];
   attendance: any[];
+  auditLogs: any[];
+  dailyReports: any[];
   canManageStaff: boolean;
 }
 
 const tabs = [
   { key: 'cashbook', label: '出納帳', icon: Wallet },
+  { key: 'staff-sales', label: 'スタッフ売上', icon: TrendingUp },
   { key: 'attendance', label: '勤怠', icon: MapPin },
   { key: 'urls', label: 'スタッフ URL', icon: Link2 },
   { key: 'line', label: 'LINE 診断', icon: MessageCircle },
+  { key: 'audit', label: '操作ログ', icon: ShieldCheck },
 ];
 
 export function AdminConsole({
@@ -33,6 +39,8 @@ export function AdminConsole({
   staff,
   cashbook,
   attendance,
+  auditLogs,
+  dailyReports,
   canManageStaff,
 }: Props) {
   const router = useRouter();
@@ -76,7 +84,7 @@ export function AdminConsole({
           })}
         </div>
 
-        {currentTab !== 'urls' && (
+        {currentTab !== 'urls' && currentTab !== 'audit' && (
           <Field label="月" className="sm:w-48">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
@@ -88,11 +96,15 @@ export function AdminConsole({
           {currentTab === 'cashbook' && (
             <CashbookAdmin entries={cashbook} stores={stores} staff={staff} />
           )}
+          {currentTab === 'staff-sales' && (
+            <StaffSalesView reports={dailyReports} staff={staff} />
+          )}
           {currentTab === 'attendance' && (
             <AttendanceAdmin logs={attendance} stores={stores} staff={staff} />
           )}
           {currentTab === 'urls' && <StaffUrlAdmin staff={staff} canManage={canManageStaff} />}
           {currentTab === 'line' && <LineAdmin />}
+          {currentTab === 'audit' && <AuditLogView logs={auditLogs} staff={staff} />}
         </CardContent>
       </Card>
     </div>

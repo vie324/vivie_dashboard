@@ -22,6 +22,7 @@ import {
   Ticket,
   CalendarDays,
   Scan,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -64,6 +65,7 @@ const navGroups: NavGroup[] = [
       { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
       { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
       { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
+      { href: '/inventory', label: '在庫', icon: Package, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
       { href: '/goals', label: '目標管理', icon: Target },
       { href: '/attendance', label: '勤怠', icon: MapPin },
@@ -163,14 +165,14 @@ export function Sidebar({
     <>
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-ink-900/40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-30 bg-ink-900/40 backdrop-blur-sm md:hidden print:hidden"
           onClick={onClose}
           aria-hidden
         />
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col',
+          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col print:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >

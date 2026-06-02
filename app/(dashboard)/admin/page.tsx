@@ -26,6 +26,8 @@ export default async function AdminPage({
     { data: allStaff },
     { data: cashbook },
     { data: attendance },
+    { data: auditLogs },
+    { data: dailyReports },
   ] = await Promise.all([
     supabase.from('stores').select('id, name').eq('is_active', true).order('name'),
     supabase
@@ -47,6 +49,19 @@ export default async function AdminPage({
       .lte('clocked_at', `${end}T23:59:59`)
       .order('clocked_at', { ascending: false })
       .limit(2000),
+    supabase
+      .from('audit_logs')
+      .select('id, created_at, actor_id, actor_name, action, entity, entity_id, details')
+      .order('created_at', { ascending: false })
+      .limit(300),
+    supabase
+      .from('daily_reports')
+      .select(
+        'staff_id, report_date, total_sales, discount_total, existing_treatment_count, repeat_count, hpb_contract_count, meta_contract_count, minimo_contract_count, referral_contract_count',
+      )
+      .gte('report_date', start)
+      .lte('report_date', end)
+      .limit(2000),
   ]);
 
   return (
@@ -62,6 +77,8 @@ export default async function AdminPage({
         staff={(allStaff ?? []) as any}
         cashbook={(cashbook ?? []) as any}
         attendance={(attendance ?? []) as any}
+        auditLogs={(auditLogs ?? []) as any}
+        dailyReports={(dailyReports ?? []) as any}
         canManageStaff={staff.role === 'admin'}
       />
     </div>

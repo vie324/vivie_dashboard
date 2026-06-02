@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { Pencil, Save, Trash2, X, Wallet, Loader2 } from 'lucide-react';
 import { cn, formatYen, formatDate } from '@/lib/utils';
 import type { CashbookEntry, CashbookSource, CashbookType } from '@/types/database';
+import { logAudit } from '@/lib/audit';
 
 interface Props {
   entries: CashbookEntry[];
@@ -85,6 +86,12 @@ export function CashbookAdmin({ entries, stores }: Props) {
       toast.show(error.message, 'error');
       return;
     }
+    await logAudit(supabase, {
+      action: 'cashbook.update',
+      entity: 'cashbook_entry',
+      entityId: draft.id,
+      details: { amount: draft.amount, category: draft.category },
+    });
     setItems((list) => list.map((e) => (e.id === draft.id ? draft : e)));
     setEditingId(null);
     setDraft(null);
@@ -104,6 +111,11 @@ export function CashbookAdmin({ entries, stores }: Props) {
       toast.show(error.message, 'error');
       return;
     }
+    await logAudit(supabase, {
+      action: 'cashbook.delete',
+      entity: 'cashbook_entry',
+      entityId: id,
+    });
     setItems((list) => list.filter((e) => e.id !== id));
     toast.show('削除しました', 'success');
     router.refresh();
