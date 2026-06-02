@@ -163,14 +163,14 @@ export function Sidebar({
     <>
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-ink-900/40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-30 bg-ink-900/40 backdrop-blur-sm md:hidden print:hidden"
           onClick={onClose}
           aria-hidden
         />
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col',
+          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col print:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >

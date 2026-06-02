@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TreatmentDetailView } from '@/components/treatments/treatment-detail-view';
 import { LineFollowupPanel } from '@/components/treatments/line-followup-panel';
+import { PrintButton } from '@/components/ui/print-button';
 import { ChevronLeft } from 'lucide-react';
 import { formatDate, formatYen } from '@/lib/utils';
 
@@ -44,12 +45,15 @@ export default async function TreatmentDetailPage({
         title={r.member?.full_name ?? '—'}
         description={`${formatDate(r.treatment_date)} ・ ${r.store?.name ?? ''} ・ 担当 ${r.staff?.display_name ?? '—'}`}
         actions={
-          <Link href="/treatments">
-            <Button variant="ghost" size="sm">
-              <ChevronLeft size={14} />
-              一覧に戻る
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2 print:hidden">
+            <PrintButton />
+            <Link href="/treatments">
+              <Button variant="ghost" size="sm">
+                <ChevronLeft size={14} />
+                一覧に戻る
+              </Button>
+            </Link>
+          </div>
         }
       />
 

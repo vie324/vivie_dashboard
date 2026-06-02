@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CounselingReviewActions } from '@/components/counseling/review-actions';
+import { PrintButton } from '@/components/ui/print-button';
 import { PostCounselingForm } from '@/components/counseling/post-counseling-form';
 import {
   VISIT_REASONS,
@@ -85,7 +86,7 @@ export default async function CounselingDetailPage({ params }: { params: { id: s
   return (
     <div className="space-y-6 animate-fade-in-up max-w-5xl">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Link
           href="/counseling"
           className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-vivie-600"
@@ -110,6 +111,7 @@ export default async function CounselingDetailPage({ params }: { params: { id: s
               </button>
             </Link>
           )}
+          <PrintButton />
           <CounselingReviewActions id={r.id} reviewed={!!r.reviewed_at} />
         </div>
       </div>
