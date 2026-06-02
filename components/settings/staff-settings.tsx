@@ -9,6 +9,7 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { useToast } from '@/components/ui/toast';
 import { RefreshCw, Save } from 'lucide-react';
 import type { Staff } from '@/types/database';
+import { getAppUrl } from '@/lib/utils';
 
 interface StaffRow extends Staff {
   primary_store?: { name: string } | null;
@@ -76,7 +77,7 @@ export function StaffSettings({
 
       {items.map((s) => {
         const url = s.daily_report_token
-          ? `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/staff/report/${s.daily_report_token}`
+          ? `${getAppUrl()}/staff/report/${s.daily_report_token}`
           : '';
         return (
           <div key={s.id} className="rounded-xl border border-ink-100 p-4">

@@ -100,6 +100,16 @@ export function Sidebar({
     document.documentElement.classList.toggle('dark', isDark);
   }, []);
 
+  // モバイルのドロワー表示中は Escape キーで閉じられるようにする
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   function toggleDark() {
     const next = !dark;
     setDark(next);

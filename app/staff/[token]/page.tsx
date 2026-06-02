@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { FileBarChart2, MapPin, ChevronRight } from 'lucide-react';
 import { LogoIcon } from '@/components/ui/logo';
 import { formatDateTime } from '@/lib/utils';
+import { kindLabel } from '@/lib/attendance';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,13 +34,6 @@ export default async function StaffHubPage({ params }: { params: { token: string
       .limit(1)
       .maybeSingle(),
   ]);
-
-  const kindLabel: Record<string, string> = {
-    clock_in: '出勤',
-    clock_out: '退勤',
-    break_start: '休憩開始',
-    break_end: '休憩終了',
-  };
 
   return (
     <ToastProvider>
@@ -70,7 +64,7 @@ export default async function StaffHubPage({ params }: { params: { token: string
               tone="rose"
               title="勤怠打刻"
               description="出勤 / 休憩 / 退勤を記録します"
-              meta={lastClock ? `最終: ${kindLabel[(lastClock as any).kind]} ${formatDateTime((lastClock as any).clocked_at)}` : '本日まだ打刻なし'}
+              meta={lastClock ? `最終: ${kindLabel[(lastClock as any).kind as keyof typeof kindLabel]} ${formatDateTime((lastClock as any).clocked_at)}` : '本日まだ打刻なし'}
             />
             <ActionCard
               href={`/staff/report/${params.token}`}

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CopyButton } from '@/components/ui/copy-button';
 import { FileBarChart2, Plus, ExternalLink, Link as LinkIcon } from 'lucide-react';
-import { formatDate, formatYen, todayISO } from '@/lib/utils';
+import { formatDate, formatYen, todayISO, getAppUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +79,7 @@ export default async function ReportsPage() {
           <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(allStaff ?? []).map((s: any) => {
               const url = s.daily_report_token
-                ? `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/staff/report/${s.daily_report_token}`
+                ? `${getAppUrl()}/staff/report/${s.daily_report_token}`
                 : null;
               return (
                 <div

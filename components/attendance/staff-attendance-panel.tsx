@@ -9,6 +9,7 @@ import { MapPin, LogIn, LogOut, Coffee, Play, AlertTriangle } from 'lucide-react
 import { haversineMeters } from '@/lib/geo';
 import { formatDateTime } from '@/lib/utils';
 import type { AttendanceKind } from '@/types/database';
+import { kindLabel } from '@/lib/attendance';
 
 interface StoreOpt {
   id: string;
@@ -34,13 +35,6 @@ interface Props {
   stores: StoreOpt[];
   logs: LogRow[];
 }
-
-const kindLabel: Record<AttendanceKind, string> = {
-  clock_in: '出勤',
-  clock_out: '退勤',
-  break_start: '休憩開始',
-  break_end: '休憩終了',
-};
 
 const kindIcon: Record<AttendanceKind, React.ComponentType<any>> = {
   clock_in: LogIn,
