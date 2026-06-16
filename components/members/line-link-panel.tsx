@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { Link2, Unlink, MessageCircle, Search, Save, MessagesSquare } from 'lucide-react';
 import NextLink from 'next/link';
 import { formatDateTime } from '@/lib/utils';
+import { normalizeLineTarget } from '@/lib/line/id';
 
 interface LineEvent {
   id: string;
@@ -58,13 +59,20 @@ export function LineLinkPanel({
   }, []);
 
   async function linkUser(lineUserId: string, displayName?: string | null, pictureUrl?: string | null) {
+    // 前後の空白を除去し、LINE userId (U + 32 桁) の形式を検証。
+    // 不正な値を保存すると LINE 送信時に "to is invalid" エラーになる。
+    const id = normalizeLineTarget(lineUserId);
+    if (!id) {
+      toast.show('LINE userId の形式が正しくありません（U で始まる 33 文字の ID）', 'error');
+      return;
+    }
     setSubmitting(true);
     try {
       const supabase = createClient();
       const { error } = await supabase
         .from('members')
         .update({
-          line_user_id: lineUserId,
+          line_user_id: id,
           line_display_name: displayName ?? currentLineDisplayName,
           line_picture_url: pictureUrl ?? null,
         })
@@ -75,7 +83,7 @@ export function LineLinkPanel({
       await supabase
         .from('line_events')
         .update({ member_id: memberId })
-        .eq('line_user_id', lineUserId)
+        .eq('line_user_id', id)
         .is('member_id', null);
 
       toast.show(`${memberName} 様と LINE を連携しました`, 'success');

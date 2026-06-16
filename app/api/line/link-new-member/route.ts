@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { normalizeLineTarget } from '@/lib/line/id';
 
 // LINE 会話を新規会員として登録 + 紐付け
 // 既存会員の場合は紐付けのみ
@@ -17,9 +18,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid body' }, { status: 400 });
   }
 
-  const { line_user_id, full_name, furigana, phone, email, store_id } = body;
-  if (!line_user_id || !full_name) {
-    return NextResponse.json({ error: 'line_user_id と full_name は必須です' }, { status: 400 });
+  const { line_user_id: rawLineUserId, full_name, furigana, phone, email, store_id } = body;
+  // 前後の空白を除去し、LINE userId (U + 32 桁) の形式を検証してから保存する
+  const line_user_id = normalizeLineTarget(rawLineUserId);
+  if (!full_name) {
+    return NextResponse.json({ error: 'full_name は必須です' }, { status: 400 });
+  }
+  if (!line_user_id) {
+    return NextResponse.json(
+      { error: 'line_user_id の形式が不正です（U で始まる 33 文字の ID を指定してください）' },
+      { status: 400 },
+    );
   }
 
   const supabase = createServiceClient();

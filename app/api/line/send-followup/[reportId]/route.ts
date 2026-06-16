@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { pushMessage, lineConfigured } from '@/lib/line/client';
+import { normalizeLineTarget } from '@/lib/line/id';
 import { buildFollowupFlex } from '@/lib/line/flex-message';
 
 // 施術レポートからフォローアップ Flex Message を送る
@@ -35,9 +36,14 @@ export async function POST(
   if (!report) return NextResponse.json({ error: 'report not found' }, { status: 404 });
   const r = report as any;
 
-  if (!r.member?.line_user_id) {
+  const lineTarget = normalizeLineTarget(r.member?.line_user_id);
+  if (!lineTarget) {
     return NextResponse.json(
-      { error: 'この会員には LINE userId が紐付いていません。会員詳細から LINE 連携してください。' },
+      {
+        error: r.member?.line_user_id
+          ? `保存されている LINE userId の形式が不正です（"${r.member.line_user_id}"）。会員詳細から正しい userId で連携し直してください。`
+          : 'この会員には LINE userId が紐付いていません。会員詳細から LINE 連携してください。',
+      },
       { status: 400 },
     );
   }
@@ -59,7 +65,7 @@ export async function POST(
     offer: r.followup_offer,
   });
 
-  const result = await pushMessage(r.member.line_user_id, [flex]);
+  const result = await pushMessage(lineTarget, [flex]);
   if (!result.ok) {
     await supabase
       .from('treatment_reports')
