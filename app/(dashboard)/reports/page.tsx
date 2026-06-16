@@ -46,6 +46,15 @@ export default async function ReportsPage() {
   const totalRepeat = (reports ?? []).reduce((sum: number, r: any) => sum + r.repeat_count, 0);
   const repeatRate = totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0;
   const totalSales = (reports ?? []).reduce((sum: number, r: any) => sum + r.total_sales, 0);
+  const totalContracts = (reports ?? []).reduce(
+    (sum: number, r: any) =>
+      sum +
+      r.hpb_contract_count +
+      r.meta_contract_count +
+      (r.minimo_contract_count ?? 0) +
+      r.referral_contract_count,
+    0,
+  );
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -62,9 +71,10 @@ export default async function ReportsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="今月の日報数" value={`${(reports ?? []).length} 件`} />
         <Stat label="今月のリピート率" value={`${repeatRate}%`} hint={`既存${totalExisting} / リピート${totalRepeat}`} />
+        <Stat label="今月の契約数" value={`${totalContracts} 件`} hint="日報の媒体別契約の合計" />
         <Stat label="今月の合計売上" value={formatYen(totalSales)} />
       </div>
 
@@ -138,12 +148,18 @@ export default async function ReportsPage() {
                     <th className="text-right">既存</th>
                     <th className="text-right">リピート</th>
                     <th className="text-right">新規</th>
+                    <th className="text-right">契約</th>
                     <th className="text-right">売上</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(reports ?? []).map((r: any) => {
                     const newCount = r.hpb_new_count + r.meta_new_count + (r.minimo_new_count ?? 0) + r.referral_new_count;
+                    const contractCount =
+                      r.hpb_contract_count +
+                      r.meta_contract_count +
+                      (r.minimo_contract_count ?? 0) +
+                      r.referral_contract_count;
                     const rate = r.existing_treatment_count > 0
                       ? Math.round((r.repeat_count / r.existing_treatment_count) * 100)
                       : 0;
@@ -162,6 +178,7 @@ export default async function ReportsPage() {
                           <span className="ml-1 text-xs text-ink-400">({rate}%)</span>
                         </td>
                         <td className="text-right text-sm">{newCount}</td>
+                        <td className="text-right text-sm font-medium text-vivie-700">{contractCount}</td>
                         <td className="text-right text-sm font-medium">{formatYen(r.total_sales)}</td>
                       </tr>
                     );

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { AdminConsole } from '@/components/admin/admin-console';
-import { todayISO } from '@/lib/utils';
+import { todayISO, monthRange } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +18,7 @@ export default async function AdminPage({
 
   const supabase = createClient();
   const month = searchParams.month ?? todayISO().slice(0, 7);
-  const start = `${month}-01`;
-  const end = `${month}-31`;
+  const { start, endExclusive } = monthRange(month);
 
   const [
     { data: stores },
@@ -37,14 +36,14 @@ export default async function AdminPage({
       .from('cashbook_entries')
       .select('*')
       .gte('entry_date', start)
-      .lte('entry_date', end)
+      .lt('entry_date', endExclusive)
       .order('entry_date', { ascending: false })
       .limit(2000),
     supabase
       .from('attendance_logs')
       .select('*, staff:staff(display_name), store:stores(name)')
       .gte('clocked_at', `${start}T00:00:00`)
-      .lte('clocked_at', `${end}T23:59:59`)
+      .lt('clocked_at', `${endExclusive}T00:00:00`)
       .order('clocked_at', { ascending: false })
       .limit(2000),
   ]);

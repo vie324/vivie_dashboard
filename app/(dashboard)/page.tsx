@@ -7,9 +7,11 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar } from '@/components/ui/avatar';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
 import { StoreHome } from '@/components/dashboard/store-home';
+import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
 import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
 import { formatYen, formatDate, todayISO } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
+import { getGoalProgress } from '@/lib/goals';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,7 +32,7 @@ export default async function DashboardHome() {
 
   // 店舗ロール (iPad / 店舗 PC) は専用のシンプルなトップを表示
   if (staff.role === 'store') {
-    const [{ data: todayReservations }, { data: expiringTickets }] = await Promise.all([
+    const [{ data: todayReservations }, { data: expiringTickets }, goalProgress] = await Promise.all([
       supabase
         .from('reservation_overview')
         .select(
@@ -51,12 +53,14 @@ export default async function DashboardHome() {
         .gte('days_until_expiry', 0)
         .order('days_until_expiry', { ascending: true })
         .limit(8),
+      getGoalProgress(supabase, { month: monthStart.slice(0, 7), storeId: staff.primary_store_id }),
     ]);
     return (
       <StoreHome
         staff={staff}
         todayReservations={(todayReservations ?? []) as any[]}
         expiringTickets={(expiringTickets ?? []) as any[]}
+        goalProgress={goalProgress}
       />
     );
   }
@@ -72,6 +76,7 @@ export default async function DashboardHome() {
     dailySalesRes,
     expiringTicketsRes,
     todayReservationsRes,
+    goalProgress,
   ] = await Promise.all([
     supabase.from('members').select('id, status', { count: 'exact', head: false }),
     supabase
@@ -126,6 +131,8 @@ export default async function DashboardHome() {
       .neq('status', 'cancelled')
       .neq('status', 'no_show')
       .order('reservation_at', { ascending: true }),
+    // 今月の目標達成状況 (全店舗)
+    getGoalProgress(supabase, { month: monthStart.slice(0, 7) }),
   ]);
 
   const totalMembers = membersRes.count ?? 0;
@@ -196,6 +203,8 @@ export default async function DashboardHome() {
           />
         </div>
       </DashboardClient>
+
+      <GoalProgressCard progress={goalProgress} />
 
       <Card>
         <CardHeader className="flex items-center justify-between">

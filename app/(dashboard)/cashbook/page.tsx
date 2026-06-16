@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { CashbookView } from '@/components/cashbook/cashbook-view';
-import { todayISO } from '@/lib/utils';
+import { todayISO, monthRange } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,16 +12,15 @@ export default async function CashbookPage({
 }) {
   const supabase = createClient();
   const month = searchParams.month ?? todayISO().slice(0, 7);
-  const startDate = `${month}-01`;
-  const endDate = `${month}-31`;
+  const { start, endExclusive } = monthRange(month);
 
   const [{ data: stores }, { data: entries }] = await Promise.all([
     supabase.from('stores').select('id, name').eq('is_active', true).order('name'),
     supabase
       .from('cashbook_entries')
       .select('*, recorded_by_staff:staff!cashbook_entries_recorded_by_fkey(display_name)')
-      .gte('entry_date', startDate)
-      .lte('entry_date', endDate)
+      .gte('entry_date', start)
+      .lt('entry_date', endExclusive)
       .order('entry_date', { ascending: false })
       .limit(1000),
   ]);
