@@ -42,6 +42,26 @@ export function ymd(value: string | Date): string {
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 }
 
+// 月文字列 (YYYY-MM) から、その月の範囲を返す。
+// 末日を `${month}-31` のように決め打ちすると、30 日月や 2 月で
+// 不正な日付 (例: 2026-06-31) になり、Postgres が
+// 「date/time field value out of range」でクエリ全体を失敗させてしまう。
+// (= 出納帳・勤怠の数字が「反映されない」原因)
+// 半開区間 [start, endExclusive) で扱うことでこれを回避する。
+export function monthRange(month: string): {
+  start: string; // YYYY-MM-01
+  endExclusive: string; // 翌月初日 YYYY-MM-01
+  endInclusive: string; // その月の末日 YYYY-MM-DD
+} {
+  const [y, m] = month.split('-').map(Number);
+  const start = `${month}-01`;
+  // Date.UTC は月が 0 始まり。引数の m は 1 始まりなので、そのまま渡すと「翌月」になる。
+  const endExclusive = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate(); // 翌月 0 日 = 当月末日
+  const endInclusive = `${month}-${String(lastDay).padStart(2, '0')}`;
+  return { start, endExclusive, endInclusive };
+}
+
 export function generateToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(24)))
     .map((b) => b.toString(16).padStart(2, '0'))

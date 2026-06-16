@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { ToastProvider } from '@/components/ui/toast';
 import { FileBarChart2, MapPin, ChevronRight } from 'lucide-react';
 import { LogoIcon } from '@/components/ui/logo';
+import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
+import { getGoalProgress } from '@/lib/goals';
 import { formatDateTime } from '@/lib/utils';
 import { kindLabel } from '@/lib/attendance';
 
@@ -13,13 +15,14 @@ export default async function StaffHubPage({ params }: { params: { token: string
   const supabase = createServiceClient();
   const { data: staff } = await supabase
     .from('staff')
-    .select('id, display_name, primary_store:stores(name), is_active')
+    .select('id, display_name, primary_store_id, primary_store:stores(name), is_active')
     .eq('daily_report_token', params.token)
     .maybeSingle();
   if (!staff || !staff.is_active) notFound();
 
   const today = new Date().toISOString().slice(0, 10);
-  const [{ data: todayReport }, { data: lastClock }] = await Promise.all([
+  const month = today.slice(0, 7);
+  const [{ data: todayReport }, { data: lastClock }, goalProgress] = await Promise.all([
     supabase
       .from('daily_reports')
       .select('id, submitted_at')
@@ -33,6 +36,7 @@ export default async function StaffHubPage({ params }: { params: { token: string
       .order('clocked_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    getGoalProgress(supabase, { month, storeId: (staff as any).primary_store_id }),
   ]);
 
   return (
@@ -73,6 +77,14 @@ export default async function StaffHubPage({ params }: { params: { token: string
               title="日報入力"
               description="本日の集客・施術・売上を記録します"
               meta={todayReport ? `本日入力済 (${formatDateTime((todayReport as any).submitted_at)})` : '本日まだ入力なし'}
+            />
+          </div>
+
+          <div className="mt-3">
+            <GoalProgressCard
+              progress={goalProgress}
+              title="今月の目標"
+              storeName={(staff as any).primary_store?.name ?? null}
             />
           </div>
 

@@ -14,6 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
+import type { GoalProgress } from '@/lib/goals';
 import type { Staff } from '@/types/database';
 
 type QuickAction = {
@@ -81,10 +83,12 @@ export function StoreHome({
   staff,
   todayReservations,
   expiringTickets,
+  goalProgress,
 }: {
   staff: Staff;
   todayReservations: any[];
   expiringTickets: any[];
+  goalProgress?: GoalProgress;
 }) {
   const now = new Date();
   const todayLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
@@ -103,6 +107,8 @@ export function StoreHome({
           今日の予約は {todayReservations.length} 件、残り {upcoming.length} 件です
         </p>
       </div>
+
+      {goalProgress && <GoalProgressCard progress={goalProgress} />}
 
       <section>
         <p className="px-1 mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-400">
