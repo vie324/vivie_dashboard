@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { MessageCircle, Send, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { formatDateTime, formatYen, formatDate } from '@/lib/utils';
+import { isValidLineTarget } from '@/lib/line/id';
 
 interface Props {
   reportId: string;
@@ -58,7 +59,9 @@ export function LineFollowupPanel({
     }
   }
 
-  const canSend = isFirstVisit && !contracted && memberLineUserId && followupOffer;
+  // 空白混入だけなら normalize で救済されるため、trim 後に形式が正しいかで判定
+  const lineIdValid = isValidLineTarget(memberLineUserId);
+  const canSend = isFirstVisit && !contracted && lineIdValid && followupOffer;
 
   return (
     <Card className="border-vivie-200 bg-gradient-to-br from-vivie-50/40 to-white">
@@ -80,10 +83,12 @@ export function LineFollowupPanel({
           <Badge tone={contracted ? 'green' : 'amber'}>
             {contracted ? '契約成立' : '未契約'}
           </Badge>
-          {memberLineUserId ? (
+          {!memberLineUserId ? (
+            <Badge tone="amber">LINE 未連携</Badge>
+          ) : lineIdValid ? (
             <Badge tone="green">LINE 連携済</Badge>
           ) : (
-            <Badge tone="amber">LINE 未連携</Badge>
+            <Badge tone="amber">LINE ID 要確認</Badge>
           )}
           {lineSentAt && (
             <Badge tone="green">
@@ -135,17 +140,21 @@ export function LineFollowupPanel({
         )}
 
         {/* 会員 LINE 連携状態 */}
-        {!memberLineUserId ? (
+        {!lineIdValid ? (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700">
             <p className="font-medium mb-1">
               <AlertTriangle size={12} className="inline -mt-0.5 mr-1" />
-              この会員に LINE userId が紐付いていません
+              {memberLineUserId
+                ? '保存されている LINE userId の形式が不正です'
+                : 'この会員に LINE userId が紐付いていません'}
             </p>
             <p>
               <Link href={`/members/${memberId}`} className="underline hover:text-amber-900">
                 会員詳細
               </Link>{' '}
-              から LINE 連携してください。お客様が公式 LINE を友だち追加すると、管理コンソールに userId が表示されます。
+              {memberLineUserId
+                ? 'から正しい userId で連携し直してください。'
+                : 'から LINE 連携してください。お客様が公式 LINE を友だち追加すると、管理コンソールに userId が表示されます。'}
             </p>
           </div>
         ) : (
