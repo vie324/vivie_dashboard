@@ -25,6 +25,8 @@ export type MemberSource = 'square' | 'manual';
 export type MemberStatus = 'active' | 'paused' | 'cancelled' | 'lead';
 export type CashbookType = 'income' | 'expense' | 'adjustment';
 export type CashbookSource = 'cash' | 'square' | 'bank' | 'online' | 'other';
+// 売上区分 (収入の内訳)。サブスク課金 / 単発 / 回数券 / 物販 / その他。
+export type SaleKind = 'subscription' | 'single' | 'ticket' | 'product' | 'other';
 export type AttendanceKind = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
 export type ReservationSource =
   | 'hpb'
@@ -98,6 +100,8 @@ export type Member = {
   primary_store_id: string | null;
   notes: string | null;
   joined_at: string | null;
+  // 獲得媒体 (派生リピート率の集計軸)。counseling_records.acquisition_channel から補完。
+  acquisition_channel: string | null;
   line_user_id: string | null;
   line_display_name: string | null;
   line_picture_url: string | null;
@@ -141,6 +145,8 @@ export type Visit = {
   menu: string | null;
   amount: number | null;
   notes: string | null;
+  // 施術レポートから自動投入された来店行を一意に紐付ける (重複防止)
+  treatment_report_id: string | null;
   created_at: string;
 };
 
@@ -202,6 +208,10 @@ export type CashbookEntry = {
   description: string | null;
   related_member_id: string | null;
   square_payment_id: string | null;
+  // 売上区分とその根拠 (Square サブスク課金の自動判定 / 回数券記帳で利用)
+  sale_kind: SaleKind | null;
+  square_order_id: string | null;
+  square_subscription_id: string | null;
   recorded_by: string | null;
   created_at: string;
   updated_at: string;
@@ -222,6 +232,15 @@ export type DailyReport = {
   minimo_contract_count: number;
   existing_treatment_count: number;
   repeat_count: number;
+  // 媒体別の既存施術件数 / リピート (再来) 件数 — 媒体別リピート率の算出に使用 (任意入力)
+  hpb_existing_count: number;
+  hpb_repeat_count: number;
+  meta_existing_count: number;
+  meta_repeat_count: number;
+  minimo_existing_count: number;
+  minimo_repeat_count: number;
+  referral_existing_count: number;
+  referral_repeat_count: number;
   total_sales: number;
   discount_total: number;
   highlights: string | null;
@@ -563,6 +582,16 @@ export type ReservationOverview = Reservation & {
   store_name: string | null;
 };
 
+// 派生リピート率 (媒体別) — 会員の獲得媒体 × 来店履歴ベースの参考値
+export type RepeatRateByMediaDerived = {
+  channel: string;
+  month: string; // YYYY-MM
+  total_visits: number | null;
+  first_visits: number | null;
+  repeat_visits: number | null;
+  repeat_rate: number | null;
+};
+
 // =====================================================
 // Supabase Database 型
 // =====================================================
@@ -619,6 +648,7 @@ export interface Database {
       counseling_staff_summary: ViewDef<CounselingStaffSummary>;
       ticket_overview: ViewDef<TicketOverview>;
       reservation_overview: ViewDef<ReservationOverview>;
+      repeat_rate_by_media_derived: ViewDef<RepeatRateByMediaDerived>;
     };
     Functions: {
       use_ticket: {

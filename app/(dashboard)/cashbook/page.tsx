@@ -26,7 +26,9 @@ export default async function CashbookPage({
   ]);
 
   const storeList = (stores ?? []) as { id: string; name: string }[];
-  const storeId = searchParams.store ?? storeList[0]?.id ?? '';
+  // 既定は「全店舗」。先頭店舗に固定すると、全店データを取得しているのに
+  // 1 店舗分しか表示されず数字が合わない原因になっていた。
+  const storeId = searchParams.store ?? '';
 
   return (
     <div className="space-y-6 animate-fade-in-up">

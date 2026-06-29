@@ -48,6 +48,7 @@ export function MemberTicketsPanel({ memberId, storeId, tickets, plans, isManage
   const [form, setForm] = useState({
     plan_id: plans[0]?.id ?? '',
     purchased_at: new Date().toISOString().slice(0, 10),
+    payment_method: 'cash',
     notes: '',
   });
 
@@ -65,13 +66,17 @@ export function MemberTicketsPanel({ memberId, storeId, tickets, plans, isManage
           member_id: memberId,
           plan_id: form.plan_id,
           purchased_at: form.purchased_at,
+          payment_method: form.payment_method,
           store_id: storeId,
           notes: form.notes || null,
         }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? '失敗しました');
-      toast.show('回数券を発行しました', 'success');
+      toast.show(
+        body.cashbook_recorded ? '回数券を発行し、売上を出納帳に記帳しました' : '回数券を発行しました',
+        'success',
+      );
       setShowIssue(false);
       router.refresh();
     } catch (err) {
@@ -265,6 +270,18 @@ export function MemberTicketsPanel({ memberId, storeId, tickets, plans, isManage
               value={form.purchased_at}
               onChange={(e) => setForm((f) => ({ ...f, purchased_at: e.target.value }))}
             />
+          </Field>
+          <Field label="支払方法" hint="現金/銀行/オンラインは売上として出納帳に自動記帳されます。Square は決済連携側で記帳されるため二重計上を避けて記帳しません。">
+            <Select
+              value={form.payment_method}
+              onChange={(e) => setForm((f) => ({ ...f, payment_method: e.target.value }))}
+            >
+              <option value="cash">現金</option>
+              <option value="bank">銀行振込</option>
+              <option value="online">オンライン</option>
+              <option value="square">Square (決済連携で記帳)</option>
+              <option value="other">その他</option>
+            </Select>
           </Field>
           <Field label="メモ (任意)">
             <Textarea

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/server';
+import { jstDateFromISO } from '@/lib/utils';
+import type { SaleKind } from '@/types/database';
 
 // Square Webhook 署名検証
 function verifySquareSignature(
@@ -85,16 +87,57 @@ export async function POST(request: NextRequest) {
           .eq('square_location_id', p.location_id)
           .maybeSingle();
         if (store) {
-          await supabase.from('cashbook_entries').insert({
-            store_id: store.id,
-            entry_date: (p.created_at ?? new Date().toISOString()).slice(0, 10),
-            entry_type: 'income' as const,
-            source: 'square' as const,
-            category: 'Square 決済',
-            amount: Number(p.amount_money.amount),
-            description: `Square Payment ${p.id}`,
-            square_payment_id: p.id,
-          });
+          const amount = Number(p.amount_money.amount);
+
+          // サブスク課金かどうかを判定する。
+          // Square の payment オブジェクトは subscription_id を直接持たないため、
+          // 顧客の有効サブスクとその月額が金額一致するかで推定する。
+          let saleKind: SaleKind = 'single';
+          let matchedSubscriptionId: string | null = null;
+          let relatedMemberId: string | null = null;
+
+          if (p.customer_id) {
+            const { data: member } = await supabase
+              .from('members')
+              .select('id')
+              .eq('square_customer_id', p.customer_id)
+              .maybeSingle();
+            relatedMemberId = (member as any)?.id ?? null;
+
+            if (relatedMemberId) {
+              const { data: subs } = await supabase
+                .from('member_subscriptions')
+                .select('square_subscription_id, status, plan:subscription_plans(monthly_price)')
+                .eq('member_id', relatedMemberId)
+                .in('status', ['ACTIVE', 'active']);
+              const match = (subs ?? []).find(
+                (s: any) => Number(s.plan?.monthly_price ?? -1) === amount,
+              );
+              if (match) {
+                saleKind = 'subscription';
+                matchedSubscriptionId = (match as any).square_subscription_id ?? null;
+              }
+            }
+          }
+
+          // square_payment_id の一意制約により再送・payment.created/updated の二重計上を防止
+          await supabase.from('cashbook_entries').upsert(
+            {
+              store_id: store.id,
+              entry_date: jstDateFromISO(p.created_at),
+              entry_type: 'income' as const,
+              source: 'square' as const,
+              category: saleKind === 'subscription' ? 'サブスク売上' : 'Square 決済',
+              amount,
+              description: `Square Payment ${p.id}`,
+              square_payment_id: p.id,
+              square_order_id: p.order_id ?? null,
+              square_subscription_id: matchedSubscriptionId,
+              sale_kind: saleKind,
+              related_member_id: relatedMemberId,
+            },
+            { onConflict: 'square_payment_id', ignoreDuplicates: false },
+          );
         }
       }
     }

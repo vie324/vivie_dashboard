@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
     purchased_at,
     store_id,
     notes,
+    // 支払方法。Square は Webhook 側で自動記帳されるため出納帳には書かない。
+    payment_method,
   } = body;
 
   if (!member_id) return NextResponse.json({ error: 'member_id required' }, { status: 400 });
@@ -86,5 +88,32 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, ticket_id: (data as any).id });
+
+  // 回数券の販売額を売上として出納帳に記帳 (sale_kind='ticket')。
+  // Square 決済は Webhook が同じ金額を記帳するため、二重計上を避けて出納帳には書かない。
+  const allowedMethods: Record<string, 'cash' | 'bank' | 'online' | 'other'> = {
+    cash: 'cash',
+    bank: 'bank',
+    online: 'online',
+    other: 'other',
+  };
+  const cashSource = allowedMethods[payment_method as string];
+  let cashbook_recorded = false;
+  if (cashSource && store_id && snapshot.price > 0) {
+    const { error: cashErr } = await supabase.from('cashbook_entries').insert({
+      store_id,
+      entry_date: purchaseDate.toISOString().slice(0, 10),
+      entry_type: 'income' as const,
+      source: cashSource,
+      category: '回数券販売',
+      amount: snapshot.price,
+      description: `回数券販売: ${snapshot.plan_name}`,
+      related_member_id: member_id,
+      sale_kind: 'ticket' as const,
+      recorded_by: user.id,
+    });
+    if (!cashErr) cashbook_recorded = true;
+  }
+
+  return NextResponse.json({ ok: true, ticket_id: (data as any).id, cashbook_recorded });
 }
