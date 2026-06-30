@@ -38,6 +38,14 @@ export async function POST(
     'referral_contract_count',
     'existing_treatment_count',
     'repeat_count',
+    'hpb_existing_count',
+    'hpb_repeat_count',
+    'meta_existing_count',
+    'meta_repeat_count',
+    'minimo_existing_count',
+    'minimo_repeat_count',
+    'referral_existing_count',
+    'referral_repeat_count',
     'total_sales',
     'discount_total',
   ] as const;
@@ -51,13 +59,36 @@ export async function POST(
     next_actions: body.next_actions || null,
   };
   for (const k of numKeys) {
-    payload[k] = Number(body[k]) || 0;
+    payload[k] = Math.max(0, Number(body[k]) || 0);
   }
-  if (
-    Number(body.repeat_count) > Number(body.existing_treatment_count)
-  ) {
+  const n = (k: string) => Number(payload[k]) || 0;
+  if (n('repeat_count') > n('existing_treatment_count')) {
     return NextResponse.json(
       { error: 'リピート件数は既存施術件数を超えられません' },
+      { status: 400 },
+    );
+  }
+  const mediaChecks: [string, string, string][] = [
+    ['hpb_repeat_count', 'hpb_existing_count', 'ホットペッパー'],
+    ['meta_repeat_count', 'meta_existing_count', 'Meta 広告'],
+    ['minimo_repeat_count', 'minimo_existing_count', 'minimo'],
+    ['referral_repeat_count', 'referral_existing_count', '紹介'],
+  ];
+  for (const [r, e, label] of mediaChecks) {
+    if (n(r) > n(e)) {
+      return NextResponse.json(
+        { error: `${label}: リピートが既存件数を超えています` },
+        { status: 400 },
+      );
+    }
+  }
+  const mediaExisting =
+    n('hpb_existing_count') + n('meta_existing_count') + n('minimo_existing_count') + n('referral_existing_count');
+  const mediaRepeat =
+    n('hpb_repeat_count') + n('meta_repeat_count') + n('minimo_repeat_count') + n('referral_repeat_count');
+  if (mediaExisting > n('existing_treatment_count') || mediaRepeat > n('repeat_count')) {
+    return NextResponse.json(
+      { error: '媒体別の合計が総数を超えています' },
       { status: 400 },
     );
   }

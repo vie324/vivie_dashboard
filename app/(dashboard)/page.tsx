@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/dashboard/page-header';
-import { KpiCard } from '@/components/dashboard/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar } from '@/components/ui/avatar';
-import { DashboardClient } from '@/components/dashboard/dashboard-client';
+import { DashboardKpis } from '@/components/dashboard/dashboard-kpis';
+import type { MetricsSummary } from '@/app/api/metrics/summary/route';
 import { StoreHome } from '@/components/dashboard/store-home';
 import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
-import { Users, TrendingUp, Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
-import { formatYen, formatDate, todayISO } from '@/lib/utils';
+import { Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
+import { formatYen, formatDate, todayISO, monthRange } from '@/lib/utils';
 import { getCurrentStaff } from '@/lib/auth';
 import { getGoalProgress } from '@/lib/goals';
 
@@ -22,7 +22,8 @@ export default async function DashboardHome() {
   if (!staff) return null;
 
   const today = todayISO();
-  const monthStart = today.slice(0, 7) + '-01';
+  const month = today.slice(0, 7);
+  const { start: monthStart, endExclusive: monthEndExclusive } = monthRange(month);
 
   // 期間別データはクライアント側で再取得するので、ここでは初期表示用 (今月)
   const todayStart = new Date();
@@ -67,6 +68,7 @@ export default async function DashboardHome() {
 
   const [
     membersRes,
+    activeMembersRes,
     activeSubsRes,
     monthCashRes,
     monthReportRes,
@@ -78,20 +80,25 @@ export default async function DashboardHome() {
     todayReservationsRes,
     goalProgress,
   ] = await Promise.all([
-    supabase.from('members').select('id, status', { count: 'exact', head: false }),
+    supabase.from('members').select('id', { count: 'exact', head: true }),
+    supabase
+      .from('members')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'active'),
     supabase
       .from('member_subscriptions')
       .select('id', { count: 'exact', head: true })
       .in('status', ['ACTIVE', 'active']),
     supabase
       .from('cashbook_entries')
-      .select('amount, entry_type, entry_date')
+      .select('amount, entry_type, sale_kind')
       .gte('entry_date', monthStart)
-      .lte('entry_date', today),
+      .lt('entry_date', monthEndExclusive),
     supabase
       .from('daily_reports')
       .select('existing_treatment_count, repeat_count, total_sales')
-      .gte('report_date', monthStart),
+      .gte('report_date', monthStart)
+      .lt('report_date', monthEndExclusive),
     supabase
       .from('counseling_records')
       .select('id', { count: 'exact', head: true })
@@ -136,13 +143,16 @@ export default async function DashboardHome() {
   ]);
 
   const totalMembers = membersRes.count ?? 0;
-  const activeMembers = (membersRes.data ?? []).filter((m: any) => m.status === 'active').length;
-  const activeSubs = activeSubsRes.count ?? 0;
   const counselingCount = counselingRes.count ?? 0;
 
   const cashEntries = monthCashRes.data ?? [];
-  const monthIncome = cashEntries
-    .filter((e: any) => e.entry_type === 'income')
+  const incomeEntries = cashEntries.filter((e: any) => e.entry_type === 'income');
+  const monthIncome = incomeEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
+  const subscriptionIncome = incomeEntries
+    .filter((e: any) => e.sale_kind === 'subscription')
+    .reduce((sum: number, e: any) => sum + e.amount, 0);
+  const ticketIncome = incomeEntries
+    .filter((e: any) => e.sale_kind === 'ticket')
     .reduce((sum: number, e: any) => sum + e.amount, 0);
   const monthExpense = cashEntries
     .filter((e: any) => e.entry_type === 'expense')
@@ -151,7 +161,23 @@ export default async function DashboardHome() {
   const reports = monthReportRes.data ?? [];
   const totalExisting = reports.reduce((s: number, r: any) => s + r.existing_treatment_count, 0);
   const totalRepeat = reports.reduce((s: number, r: any) => s + r.repeat_count, 0);
-  const repeatRate = totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0;
+
+  // 期間タブ初期値 (今月)。クライアントで期間を変えると /api/metrics/summary で再取得する。
+  const initialSummary: MetricsSummary = {
+    from: monthStart,
+    to: today,
+    totalMembers,
+    activeMembers: activeMembersRes.count ?? 0,
+    activeSubs: activeSubsRes.count ?? 0,
+    income: monthIncome,
+    subscriptionIncome,
+    ticketIncome,
+    otherIncome: monthIncome - subscriptionIncome - ticketIncome,
+    expense: monthExpense,
+    existing: totalExisting,
+    repeat: totalRepeat,
+    repeatRate: totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0,
+  };
 
   // 30 日トレンド
   const dailyMap = new Map<string, number>();
@@ -171,38 +197,7 @@ export default async function DashboardHome() {
         description={`今月 (${monthStart.slice(0, 7)}) の概況です`}
       />
 
-      <DashboardClient initialMonth={monthStart.slice(0, 7)}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard
-            label="総会員数"
-            value={totalMembers}
-            hint={`アクティブ ${activeMembers}名`}
-            icon={<Users size={18} />}
-            tone="rose"
-          />
-          <KpiCard
-            label="サブスク継続"
-            value={activeSubs}
-            hint="Square 連携"
-            icon={<TrendingUp size={18} />}
-            tone="amber"
-          />
-          <KpiCard
-            label="今月の売上"
-            value={formatYen(monthIncome)}
-            hint={`支出 ${formatYen(monthExpense)}`}
-            icon={<Wallet size={18} />}
-            tone="green"
-          />
-          <KpiCard
-            label="リピート率"
-            value={`${repeatRate}%`}
-            hint={`既存${totalExisting}件中 ${totalRepeat}件`}
-            icon={<FileBarChart2 size={18} />}
-            tone="blue"
-          />
-        </div>
-      </DashboardClient>
+      <DashboardKpis initial={initialSummary} />
 
       <GoalProgressCard progress={goalProgress} />
 

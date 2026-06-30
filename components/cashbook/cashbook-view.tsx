@@ -18,7 +18,7 @@ import {
   Tooltip as ReTooltip,
   Legend,
 } from 'recharts';
-import type { CashbookEntry, CashbookSource, CashbookType } from '@/types/database';
+import type { CashbookEntry, CashbookSource, CashbookType, SaleKind } from '@/types/database';
 
 interface EntryWithMeta extends CashbookEntry {
   recorded_by_staff?: { display_name: string } | null;
@@ -44,6 +44,15 @@ const typeLabel: Record<CashbookType, string> = {
   expense: '出金',
   adjustment: '調整',
 };
+
+const saleKindLabel: Record<SaleKind, string> = {
+  subscription: 'サブスク売上',
+  single: '単発売上',
+  ticket: '回数券売上',
+  product: '物販売上',
+  other: 'その他売上',
+};
+const saleKindOrder: SaleKind[] = ['subscription', 'single', 'ticket', 'product', 'other'];
 
 const PIE_COLORS = ['#DCA9A8', '#F59E0B', '#10B981', '#0EA5E9', '#8B5CF6', '#EC4899', '#F97316', '#94A3B8'];
 
@@ -74,7 +83,24 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
   const totals = useMemo(() => {
     const income = filtered.filter((e) => e.entry_type === 'income').reduce((s, e) => s + e.amount, 0);
     const expense = filtered.filter((e) => e.entry_type === 'expense').reduce((s, e) => s + e.amount, 0);
-    return { income, expense, balance: income - expense };
+    const adjustment = filtered
+      .filter((e) => e.entry_type === 'adjustment')
+      .reduce((s, e) => s + e.amount, 0);
+    return { income, expense, adjustment, balance: income - expense };
+  }, [filtered]);
+
+  // 売上区分別 (入金のみ)。区分未設定は「その他売上」に寄せる。
+  const saleKindBreakdown = useMemo(() => {
+    const map = new Map<SaleKind, number>();
+    filtered
+      .filter((e) => e.entry_type === 'income')
+      .forEach((e) => {
+        const kind = (e.sale_kind ?? 'other') as SaleKind;
+        map.set(kind, (map.get(kind) ?? 0) + e.amount);
+      });
+    return saleKindOrder
+      .map((kind) => ({ kind, label: saleKindLabel[kind], value: map.get(kind) ?? 0 }))
+      .filter((row) => row.value > 0);
   }, [filtered]);
 
   // カテゴリ別の集計 (グラフ用)
@@ -121,9 +147,19 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
       e.amount.toString(),
       (e.description ?? '').replace(/[\r\n,]/g, ' '),
     ]);
+    // 画面上の集計と一致するよう合計行を末尾に付ける
+    const summary = [
+      [],
+      ['', '', '', '', '入金合計', totals.income.toString()],
+      ['', '', '', '', '出金合計', totals.expense.toString()],
+      ['', '', '', '', '差引', totals.balance.toString()],
+    ];
+    if (totals.adjustment !== 0) {
+      summary.push(['', '', '', '', '調整合計', totals.adjustment.toString()]);
+    }
     const csv =
       '﻿' +
-      [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+      [headers, ...rows, ...summary].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -181,6 +217,30 @@ export function CashbookView({ stores, initialEntries, initialMonth, initialStor
         <SummaryCard label="出金" value={totals.expense} icon={<ArrowUpCircle size={18} />} tone="red" />
         <SummaryCard label="差引" value={totals.balance} icon={<Wallet size={18} />} tone="rose" />
       </div>
+
+      {/* 売上区分別 (サブスク / 単発 / 回数券 など) */}
+      {saleKindBreakdown.length > 0 && (
+        <div className="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
+          <p className="mb-2 text-xs font-medium text-ink-500">売上区分別 (入金内訳)</p>
+          <div className="flex flex-wrap gap-2">
+            {saleKindBreakdown.map((row) => (
+              <span
+                key={row.kind}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ink-50 px-3 py-1.5 text-sm"
+              >
+                <span className="text-ink-600">{row.label}</span>
+                <span className="font-semibold text-ink-900">{formatYen(row.value)}</span>
+              </span>
+            ))}
+            {totals.adjustment !== 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1.5 text-sm">
+                <span className="text-amber-700">調整</span>
+                <span className="font-semibold text-amber-800">{formatYen(totals.adjustment)}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* カテゴリ別グラフ */}
       {(categoryBreakdown.income.length > 0 || categoryBreakdown.expense.length > 0) && (
@@ -341,6 +401,7 @@ function CashbookEntryForm({
     entry_date: todayISO(),
     entry_type: 'income' as CashbookType,
     source: 'cash' as CashbookSource,
+    sale_kind: 'single' as SaleKind,
     category: '',
     amount: '',
     description: '',
@@ -371,6 +432,7 @@ function CashbookEntryForm({
           entry_date: form.entry_date,
           entry_type: form.entry_type,
           source: form.source,
+          sale_kind: form.entry_type === 'income' ? form.sale_kind : null,
           category: form.category || (form.entry_type === 'income' ? '売上' : '経費'),
           amount,
           description: form.description || null,
@@ -447,6 +509,20 @@ function CashbookEntryForm({
                 <option value="other">その他</option>
               </Select>
             </Field>
+            {form.entry_type === 'income' && (
+              <Field label="売上区分" hint="ダッシュボードの売上内訳に反映されます">
+                <Select
+                  value={form.sale_kind}
+                  onChange={(e) => update('sale_kind', e.target.value as SaleKind)}
+                >
+                  <option value="single">単発売上</option>
+                  <option value="subscription">サブスク売上</option>
+                  <option value="ticket">回数券売上</option>
+                  <option value="product">物販売上</option>
+                  <option value="other">その他売上</option>
+                </Select>
+              </Field>
+            )}
             <Field label="カテゴリ" hint="マスタから選択 / 直接入力も可">
               <Input
                 list="cashbook-categories"

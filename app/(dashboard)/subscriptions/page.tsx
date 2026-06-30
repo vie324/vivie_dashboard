@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CreditCard } from 'lucide-react';
 import { SquareSyncButton } from '@/components/members/sync-button';
-import { formatDate, formatYen } from '@/lib/utils';
+import { formatDate, formatYen, todayISO, monthRange } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,21 +18,44 @@ export default async function SubscriptionsPage() {
   if (staff.role === 'store') redirect('/');
   const supabase = createClient();
 
-  const [{ data: subs }, { data: plans }] = await Promise.all([
-    supabase
-      .from('member_subscriptions')
-      .select('*, member:members(id, full_name, phone), plan:subscription_plans(name, monthly_price)')
-      .order('created_at', { ascending: false })
-      .limit(500),
-    supabase.from('subscription_plans').select('*').eq('is_active', true).order('monthly_price'),
-  ]);
+  const month = todayISO().slice(0, 7);
+  const { start, endExclusive } = monthRange(month);
 
-  const activeCount = (subs ?? []).filter((s: any) =>
-    ['ACTIVE', 'active'].includes(s.status),
-  ).length;
-  const totalMRR = (subs ?? [])
-    .filter((s: any) => ['ACTIVE', 'active'].includes(s.status))
-    .reduce((sum: number, s: any) => sum + (s.plan?.monthly_price ?? 0), 0);
+  const [{ data: subs }, { count: activeCount }, { data: activeSubs }, { data: plans }, { data: subCash }] =
+    await Promise.all([
+      // 一覧表示用 (最新 500 件)
+      supabase
+        .from('member_subscriptions')
+        .select('*, member:members(id, full_name, phone), plan:subscription_plans(name, monthly_price)')
+        .order('created_at', { ascending: false })
+        .limit(500),
+      // アクティブ件数 (一覧の上限に影響されない正確な件数)
+      supabase
+        .from('member_subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['ACTIVE', 'active']),
+      // MRR 算出用にアクティブ契約のプラン金額だけを取得
+      supabase
+        .from('member_subscriptions')
+        .select('plan:subscription_plans(monthly_price)')
+        .in('status', ['ACTIVE', 'active'])
+        .limit(5000),
+      supabase.from('subscription_plans').select('*').eq('is_active', true).order('monthly_price'),
+      // 今月のサブスク売上 (実績) = 出納帳の sale_kind='subscription'
+      supabase
+        .from('cashbook_entries')
+        .select('amount')
+        .eq('entry_type', 'income')
+        .eq('sale_kind', 'subscription')
+        .gte('entry_date', start)
+        .lt('entry_date', endExclusive),
+    ]);
+
+  const totalMRR = (activeSubs ?? []).reduce(
+    (sum: number, s: any) => sum + (s.plan?.monthly_price ?? 0),
+    0,
+  );
+  const actualSubRevenue = (subCash ?? []).reduce((sum: number, e: any) => sum + e.amount, 0);
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -42,9 +65,10 @@ export default async function SubscriptionsPage() {
         actions={<SquareSyncButton />}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="アクティブ契約" value={`${activeCount} 件`} />
-        <StatCard label="月次定額売上 (MRR)" value={formatYen(totalMRR)} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="アクティブ契約" value={`${activeCount ?? 0} 件`} />
+        <StatCard label="月次定額売上 (MRR・理論値)" value={formatYen(totalMRR)} />
+        <StatCard label="今月のサブスク売上 (実績)" value={formatYen(actualSubRevenue)} />
         <StatCard label="プラン数" value={`${(plans ?? []).length} 種類`} />
       </div>
 

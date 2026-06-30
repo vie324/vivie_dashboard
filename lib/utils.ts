@@ -30,16 +30,33 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   });
 }
 
+// サロンは JST 運用のため、サーバー (Vercel = UTC) でもクライアントでも
+// 必ず日本時間 (UTC+9, 日本は DST 無し) の暦日に揃える。
+// getTimezoneOffset を使うと UTC サーバー上で UTC 日付になり、深夜帯の売上/日報が
+// 前日にズレて「今月の数字に反映されない」原因になっていた。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 export function todayISO(): string {
-  const d = new Date();
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+  return new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 export function ymd(value: string | Date): string {
   const d = typeof value === 'string' ? new Date(value) : value;
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Date(d.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// ISO タイムスタンプ (UTC) を JST の暦日 (YYYY-MM-DD) に変換する。
+// Square の created_at など UTC タイムスタンプを出納帳の entry_date に使う際に利用。
+export function jstDateFromISO(iso: string | null | undefined): string {
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return todayISO();
+  return new Date(d.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// 今月 (JST) を YYYY-MM で返す
+export function thisMonthJST(): string {
+  return todayISO().slice(0, 7);
 }
 
 // 月文字列 (YYYY-MM) から、その月の範囲を返す。

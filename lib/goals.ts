@@ -16,6 +16,20 @@ export type GoalMetric = {
   unit: GoalMetricUnit;
 };
 
+export type MediaKey = 'hpb' | 'meta' | 'minimo' | 'referral';
+
+export const MEDIA_LABELS: Record<MediaKey, string> = {
+  hpb: 'ホットペッパー',
+  meta: 'Meta 広告',
+  minimo: 'minimo',
+  referral: '紹介',
+};
+
+export type RepeatByMedia = Record<
+  MediaKey,
+  { existing: number; repeat: number; rate: number }
+>;
+
 export type GoalActuals = {
   hpbNew: number;
   metaNew: number;
@@ -31,6 +45,19 @@ export type GoalActuals = {
   existing: number;
   repeat: number;
   repeatRate: number;
+  // 媒体別の既存/リピート内訳 (日報の任意入力ベース)
+  repeatByMedia: RepeatByMedia;
+  reportCount: number;
+};
+
+// スタッフ別リピート率 (日報ベース)
+export type RepeatRateByStaff = {
+  staffId: string;
+  staffName: string;
+  existing: number;
+  repeat: number;
+  repeatRate: number;
+  sales: number;
   reportCount: number;
 };
 
@@ -47,6 +74,20 @@ export type GoalProgress = {
 const REPORT_COLUMNS_BASE =
   'hpb_new_count, hpb_contract_count, meta_new_count, meta_contract_count, referral_new_count, referral_contract_count, existing_treatment_count, repeat_count, total_sales';
 const REPORT_COLUMNS_MINIMO = REPORT_COLUMNS_BASE + ', minimo_new_count, minimo_contract_count';
+// 媒体別の既存/リピート列 (後発マイグレーション)。未適用環境ではフォールバックする。
+const REPORT_COLUMNS_FULL =
+  REPORT_COLUMNS_MINIMO +
+  ', hpb_existing_count, hpb_repeat_count, meta_existing_count, meta_repeat_count' +
+  ', minimo_existing_count, minimo_repeat_count, referral_existing_count, referral_repeat_count';
+
+function emptyRepeatByMedia(): RepeatByMedia {
+  return {
+    hpb: { existing: 0, repeat: 0, rate: 0 },
+    meta: { existing: 0, repeat: 0, rate: 0 },
+    minimo: { existing: 0, repeat: 0, rate: 0 },
+    referral: { existing: 0, repeat: 0, rate: 0 },
+  };
+}
 
 function emptyActuals(): GoalActuals {
   return {
@@ -64,6 +105,7 @@ function emptyActuals(): GoalActuals {
     existing: 0,
     repeat: 0,
     repeatRate: 0,
+    repeatByMedia: emptyRepeatByMedia(),
     reportCount: 0,
   };
 }
@@ -82,19 +124,25 @@ function sumGoals(rows: MonthlyGoal[], month: string): MonthlyGoal {
     referral_new_target: rows.reduce((s, g) => s + (g.referral_new_target ?? 0), 0),
     contract_target: rows.reduce((s, g) => s + (g.contract_target ?? 0), 0),
     sales_target: rows.reduce((s, g) => s + (g.sales_target ?? 0), 0),
-    // リピート率は合算できないので平均を取る
-    repeat_rate_target: Math.round(
-      rows.reduce((s, g) => s + (g.repeat_rate_target ?? 0), 0) / rows.length,
-    ),
+    // リピート率は加算できないので平均を取る。未設定 (0) の店舗は分母から除外しないと
+    // 設定済み店舗の目標が薄まってしまうため、target > 0 の行だけで平均する。
+    repeat_rate_target: (() => {
+      const set = rows.filter((g) => (g.repeat_rate_target ?? 0) > 0);
+      if (set.length === 0) return 0;
+      return Math.round(
+        set.reduce((s, g) => s + (g.repeat_rate_target ?? 0), 0) / set.length,
+      );
+    })(),
   };
 }
 
 export async function getGoalProgress(
   supabase: SupabaseClient<Database>,
-  opts: { month: string; storeId?: string | null },
+  opts: { month: string; storeId?: string | null; staffId?: string | null },
 ): Promise<GoalProgress> {
   const month = opts.month;
   const storeId = opts.storeId ?? null;
+  const staffId = opts.staffId ?? null;
   const { start, endExclusive } = monthRange(month);
 
   // --- 目標を取得 (店舗指定時は店舗別を優先し、無ければ全店舗をフォールバック) ---
@@ -128,7 +176,7 @@ export async function getGoalProgress(
     }
   }
 
-  // --- 当月の日報を集計 (minimo カラムは後発のため、無い環境では除外して再試行) ---
+  // --- 当月の日報を集計 (後発カラムは無い環境では段階的にフォールバック) ---
   async function fetchReports(columns: string) {
     const q = supabase
       .from('daily_reports')
@@ -136,15 +184,29 @@ export async function getGoalProgress(
       .gte('report_date', start)
       .lt('report_date', endExclusive);
     if (storeId) q.eq('store_id', storeId);
+    if (staffId) q.eq('staff_id', staffId);
     return q;
   }
 
-  let { data: reports, error } = await fetchReports(REPORT_COLUMNS_MINIMO);
-  let minimoSupported = !error;
-  if (error) {
-    const fallback = await fetchReports(REPORT_COLUMNS_BASE);
-    reports = fallback.data;
-    minimoSupported = false;
+  // FULL (媒体別リピート列込み) → MINIMO → BASE の順にフォールバック
+  let reports: any[] | null = null;
+  let minimoSupported = true;
+  let mediaRepeatSupported = true;
+  {
+    const full = await fetchReports(REPORT_COLUMNS_FULL);
+    if (!full.error) {
+      reports = full.data as any[];
+    } else {
+      mediaRepeatSupported = false;
+      const minimo = await fetchReports(REPORT_COLUMNS_MINIMO);
+      if (!minimo.error) {
+        reports = minimo.data as any[];
+      } else {
+        minimoSupported = false;
+        const base = await fetchReports(REPORT_COLUMNS_BASE);
+        reports = base.data as any[];
+      }
+    }
   }
 
   const a = emptyActuals();
@@ -159,6 +221,16 @@ export async function getGoalProgress(
       a.minimoNew += r.minimo_new_count ?? 0;
       a.minimoContract += r.minimo_contract_count ?? 0;
     }
+    if (mediaRepeatSupported) {
+      a.repeatByMedia.hpb.existing += r.hpb_existing_count ?? 0;
+      a.repeatByMedia.hpb.repeat += r.hpb_repeat_count ?? 0;
+      a.repeatByMedia.meta.existing += r.meta_existing_count ?? 0;
+      a.repeatByMedia.meta.repeat += r.meta_repeat_count ?? 0;
+      a.repeatByMedia.minimo.existing += r.minimo_existing_count ?? 0;
+      a.repeatByMedia.minimo.repeat += r.minimo_repeat_count ?? 0;
+      a.repeatByMedia.referral.existing += r.referral_existing_count ?? 0;
+      a.repeatByMedia.referral.repeat += r.referral_repeat_count ?? 0;
+    }
     a.sales += r.total_sales ?? 0;
     a.existing += r.existing_treatment_count ?? 0;
     a.repeat += r.repeat_count ?? 0;
@@ -167,11 +239,16 @@ export async function getGoalProgress(
   a.newTotal = a.hpbNew + a.metaNew + a.minimoNew + a.referralNew;
   a.contractTotal = a.hpbContract + a.metaContract + a.minimoContract + a.referralContract;
   a.repeatRate = a.existing > 0 ? Math.round((a.repeat / a.existing) * 100) : 0;
+  for (const key of Object.keys(a.repeatByMedia) as MediaKey[]) {
+    const m = a.repeatByMedia[key];
+    m.rate = m.existing > 0 ? Math.round((m.repeat / m.existing) * 100) : 0;
+  }
 
+  // minimo 列が無い環境では minimo の目標も分母から外し、達成率を歪めない
   const newTarget = goal
     ? (goal.hpb_new_target ?? 0) +
       (goal.meta_new_target ?? 0) +
-      (goal.minimo_new_target ?? 0) +
+      (minimoSupported ? goal.minimo_new_target ?? 0 : 0) +
       (goal.referral_new_target ?? 0)
     : 0;
 
@@ -183,4 +260,47 @@ export async function getGoalProgress(
   ];
 
   return { month, storeId, goal, goalScope, actuals: a, metrics };
+}
+
+// スタッフ別のリピート率を日報から集計する (媒体別とは別軸)。
+export async function getRepeatRateByStaff(
+  supabase: SupabaseClient<Database>,
+  opts: { month: string; storeId?: string | null },
+): Promise<RepeatRateByStaff[]> {
+  const { start, endExclusive } = monthRange(opts.month);
+  let q = supabase
+    .from('daily_reports')
+    .select(
+      'staff_id, existing_treatment_count, repeat_count, total_sales, staff:staff(display_name)',
+    )
+    .gte('report_date', start)
+    .lt('report_date', endExclusive);
+  if (opts.storeId) q = q.eq('store_id', opts.storeId);
+  const { data } = await q;
+
+  const map = new Map<string, RepeatRateByStaff>();
+  for (const r of (data ?? []) as any[]) {
+    const id = r.staff_id as string;
+    const cur =
+      map.get(id) ??
+      {
+        staffId: id,
+        staffName: r.staff?.display_name ?? '—',
+        existing: 0,
+        repeat: 0,
+        repeatRate: 0,
+        sales: 0,
+        reportCount: 0,
+      };
+    cur.existing += r.existing_treatment_count ?? 0;
+    cur.repeat += r.repeat_count ?? 0;
+    cur.sales += r.total_sales ?? 0;
+    cur.reportCount += 1;
+    map.set(id, cur);
+  }
+  const rows = Array.from(map.values());
+  for (const row of rows) {
+    row.repeatRate = row.existing > 0 ? Math.round((row.repeat / row.existing) * 100) : 0;
+  }
+  return rows.sort((x, y) => y.existing - x.existing);
 }

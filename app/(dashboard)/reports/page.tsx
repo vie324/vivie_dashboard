@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CopyButton } from '@/components/ui/copy-button';
-import { FileBarChart2, Plus, ExternalLink, Link as LinkIcon } from 'lucide-react';
+import { FileBarChart2, Plus, ExternalLink, BarChart3 } from 'lucide-react';
 import { formatDate, formatYen, todayISO, getAppUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -62,12 +62,22 @@ export default async function ReportsPage() {
         title="日報"
         description={isManager ? '全スタッフの日報を確認できます' : 'あなたが提出した日報を確認できます'}
         actions={
-          <Link href="/reports/new">
-            <Button size="sm">
-              <Plus size={14} />
-              日報を入力
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            {isManager && (
+              <Link href="/reports/analytics">
+                <Button size="sm" variant="secondary">
+                  <BarChart3 size={14} />
+                  リピート分析
+                </Button>
+              </Link>
+            )}
+            <Link href="/reports/new">
+              <Button size="sm">
+                <Plus size={14} />
+                日報を入力
+              </Button>
+            </Link>
+          </div>
         }
       />
 
