@@ -96,7 +96,11 @@ export default async function DashboardHome() {
       .lt('entry_date', monthEndExclusive),
     supabase
       .from('daily_reports')
-      .select('existing_treatment_count, repeat_count, total_sales')
+      .select(
+        'existing_treatment_count, repeat_count, total_sales, hpb_new_count, hpb_contract_count,' +
+          ' meta_new_count, meta_contract_count, minimo_new_count, minimo_contract_count,' +
+          ' referral_new_count, referral_contract_count',
+      )
       .gte('report_date', monthStart)
       .lt('report_date', monthEndExclusive),
     supabase
@@ -159,8 +163,16 @@ export default async function DashboardHome() {
     .reduce((sum: number, e: any) => sum + e.amount, 0);
 
   const reports = monthReportRes.data ?? [];
-  const totalExisting = reports.reduce((s: number, r: any) => s + r.existing_treatment_count, 0);
-  const totalRepeat = reports.reduce((s: number, r: any) => s + r.repeat_count, 0);
+  const sumCol = (col: string) => reports.reduce((s: number, r: any) => s + (r[col] ?? 0), 0);
+  const totalExisting = sumCol('existing_treatment_count');
+  const totalRepeat = sumCol('repeat_count');
+  const totalNew =
+    sumCol('hpb_new_count') + sumCol('meta_new_count') + sumCol('minimo_new_count') + sumCol('referral_new_count');
+  const totalContract =
+    sumCol('hpb_contract_count') +
+    sumCol('meta_contract_count') +
+    sumCol('minimo_contract_count') +
+    sumCol('referral_contract_count');
 
   // 期間タブ初期値 (今月)。クライアントで期間を変えると /api/metrics/summary で再取得する。
   const initialSummary: MetricsSummary = {
@@ -174,6 +186,9 @@ export default async function DashboardHome() {
     ticketIncome,
     otherIncome: monthIncome - subscriptionIncome - ticketIncome,
     expense: monthExpense,
+    newCount: totalNew,
+    contractCount: totalContract,
+    contractRate: totalNew > 0 ? Math.round((totalContract / totalNew) * 100) : 0,
     existing: totalExisting,
     repeat: totalRepeat,
     repeatRate: totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0,

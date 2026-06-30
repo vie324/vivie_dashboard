@@ -30,6 +30,12 @@ export type RepeatByMedia = Record<
   { existing: number; repeat: number; rate: number }
 >;
 
+// 媒体別の契約率 (新規来店 → 契約)。広告予算配分の判断に使う主指標。
+export type ContractByMedia = Record<
+  MediaKey,
+  { newCount: number; contract: number; rate: number }
+>;
+
 export type GoalActuals = {
   hpbNew: number;
   metaNew: number;
@@ -41,19 +47,26 @@ export type GoalActuals = {
   minimoContract: number;
   referralContract: number;
   contractTotal: number;
+  // 全体契約率 (= contractTotal / newTotal)
+  contractRate: number;
+  // 媒体別の新規/契約/契約率
+  contractByMedia: ContractByMedia;
   sales: number;
   existing: number;
   repeat: number;
   repeatRate: number;
-  // 媒体別の既存/リピート内訳 (日報の任意入力ベース)
+  // 媒体別の既存/リピート内訳 (日報の任意入力ベース。参考: 再来率)
   repeatByMedia: RepeatByMedia;
   reportCount: number;
 };
 
-// スタッフ別リピート率 (日報ベース)
-export type RepeatRateByStaff = {
+// スタッフ別の実績 (日報ベース)。契約率を主指標に、再来率は参考。
+export type StaffPerformance = {
   staffId: string;
   staffName: string;
+  newCount: number;
+  contract: number;
+  contractRate: number;
   existing: number;
   repeat: number;
   repeatRate: number;
@@ -89,6 +102,19 @@ function emptyRepeatByMedia(): RepeatByMedia {
   };
 }
 
+function emptyContractByMedia(): ContractByMedia {
+  return {
+    hpb: { newCount: 0, contract: 0, rate: 0 },
+    meta: { newCount: 0, contract: 0, rate: 0 },
+    minimo: { newCount: 0, contract: 0, rate: 0 },
+    referral: { newCount: 0, contract: 0, rate: 0 },
+  };
+}
+
+function rate(numerator: number, denominator: number): number {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
+}
+
 function emptyActuals(): GoalActuals {
   return {
     hpbNew: 0,
@@ -101,6 +127,8 @@ function emptyActuals(): GoalActuals {
     minimoContract: 0,
     referralContract: 0,
     contractTotal: 0,
+    contractRate: 0,
+    contractByMedia: emptyContractByMedia(),
     sales: 0,
     existing: 0,
     repeat: 0,
@@ -238,10 +266,18 @@ export async function getGoalProgress(
   }
   a.newTotal = a.hpbNew + a.metaNew + a.minimoNew + a.referralNew;
   a.contractTotal = a.hpbContract + a.metaContract + a.minimoContract + a.referralContract;
-  a.repeatRate = a.existing > 0 ? Math.round((a.repeat / a.existing) * 100) : 0;
+  a.contractRate = rate(a.contractTotal, a.newTotal);
+  a.repeatRate = rate(a.repeat, a.existing);
+  // 媒体別の新規/契約/契約率
+  a.contractByMedia = {
+    hpb: { newCount: a.hpbNew, contract: a.hpbContract, rate: rate(a.hpbContract, a.hpbNew) },
+    meta: { newCount: a.metaNew, contract: a.metaContract, rate: rate(a.metaContract, a.metaNew) },
+    minimo: { newCount: a.minimoNew, contract: a.minimoContract, rate: rate(a.minimoContract, a.minimoNew) },
+    referral: { newCount: a.referralNew, contract: a.referralContract, rate: rate(a.referralContract, a.referralNew) },
+  };
   for (const key of Object.keys(a.repeatByMedia) as MediaKey[]) {
     const m = a.repeatByMedia[key];
-    m.rate = m.existing > 0 ? Math.round((m.repeat / m.existing) * 100) : 0;
+    m.rate = rate(m.repeat, m.existing);
   }
 
   // minimo 列が無い環境では minimo の目標も分母から外し、達成率を歪めない
@@ -255,30 +291,34 @@ export async function getGoalProgress(
   const metrics: GoalMetric[] = [
     { key: 'new', label: '新規来店', actual: a.newTotal, target: newTarget, unit: 'count' },
     { key: 'contract', label: '契約', actual: a.contractTotal, target: goal?.contract_target ?? 0, unit: 'count' },
+    { key: 'contractRate', label: '契約率', actual: a.contractRate, target: 0, unit: 'percent' },
     { key: 'sales', label: '売上', actual: a.sales, target: goal?.sales_target ?? 0, unit: 'yen' },
-    { key: 'repeat', label: 'リピート率', actual: a.repeatRate, target: goal?.repeat_rate_target ?? 0, unit: 'percent' },
+    { key: 'repeat', label: '再来率 (参考)', actual: a.repeatRate, target: goal?.repeat_rate_target ?? 0, unit: 'percent' },
   ];
 
   return { month, storeId, goal, goalScope, actuals: a, metrics };
 }
 
-// スタッフ別のリピート率を日報から集計する (媒体別とは別軸)。
-export async function getRepeatRateByStaff(
+// スタッフ別の実績 (契約率を主指標に、再来率は参考) を日報から集計する。
+// 新規/契約は媒体別カラム (init から存在) の合算なので #43 マイグレーション未適用でも動く。
+export async function getStaffPerformance(
   supabase: SupabaseClient<Database>,
   opts: { month: string; storeId?: string | null },
-): Promise<RepeatRateByStaff[]> {
+): Promise<StaffPerformance[]> {
   const { start, endExclusive } = monthRange(opts.month);
+  const columns =
+    'staff_id, hpb_new_count, hpb_contract_count, meta_new_count, meta_contract_count,' +
+    ' minimo_new_count, minimo_contract_count, referral_new_count, referral_contract_count,' +
+    ' existing_treatment_count, repeat_count, total_sales, staff:staff(display_name)';
   let q = supabase
     .from('daily_reports')
-    .select(
-      'staff_id, existing_treatment_count, repeat_count, total_sales, staff:staff(display_name)',
-    )
+    .select(columns)
     .gte('report_date', start)
     .lt('report_date', endExclusive);
   if (opts.storeId) q = q.eq('store_id', opts.storeId);
   const { data } = await q;
 
-  const map = new Map<string, RepeatRateByStaff>();
+  const map = new Map<string, StaffPerformance>();
   for (const r of (data ?? []) as any[]) {
     const id = r.staff_id as string;
     const cur =
@@ -286,12 +326,25 @@ export async function getRepeatRateByStaff(
       {
         staffId: id,
         staffName: r.staff?.display_name ?? '—',
+        newCount: 0,
+        contract: 0,
+        contractRate: 0,
         existing: 0,
         repeat: 0,
         repeatRate: 0,
         sales: 0,
         reportCount: 0,
       };
+    cur.newCount +=
+      (r.hpb_new_count ?? 0) +
+      (r.meta_new_count ?? 0) +
+      (r.minimo_new_count ?? 0) +
+      (r.referral_new_count ?? 0);
+    cur.contract +=
+      (r.hpb_contract_count ?? 0) +
+      (r.meta_contract_count ?? 0) +
+      (r.minimo_contract_count ?? 0) +
+      (r.referral_contract_count ?? 0);
     cur.existing += r.existing_treatment_count ?? 0;
     cur.repeat += r.repeat_count ?? 0;
     cur.sales += r.total_sales ?? 0;
@@ -300,7 +353,9 @@ export async function getRepeatRateByStaff(
   }
   const rows = Array.from(map.values());
   for (const row of rows) {
-    row.repeatRate = row.existing > 0 ? Math.round((row.repeat / row.existing) * 100) : 0;
+    row.contractRate = rate(row.contract, row.newCount);
+    row.repeatRate = rate(row.repeat, row.existing);
   }
-  return rows.sort((x, y) => y.existing - x.existing);
+  // 新規が多い順 (広告予算判断で母数の大きいスタッフを上に)
+  return rows.sort((x, y) => y.newCount - x.newCount);
 }

@@ -10,16 +10,24 @@ import {
   LabelList,
 } from 'recharts';
 
-export type RepeatBar = { name: string; rate: number; existing: number; repeat: number };
+export type RateBar = { name: string; rate: number; numerator: number; denominator: number };
 
 function barColor(rate: number): string {
-  if (rate >= 60) return '#10B981'; // emerald
-  if (rate >= 40) return '#F59E0B'; // amber
+  if (rate >= 50) return '#10B981'; // emerald
+  if (rate >= 25) return '#F59E0B'; // amber
   return '#DCA9A8'; // vivie rose
 }
 
-// スタッフ別 / 媒体別のリピート率を横棒で可視化する。
-export function RepeatBarChart({ data }: { data: RepeatBar[] }) {
+// 媒体別 / スタッフ別の比率 (契約率・再来率など) を横棒で可視化する汎用チャート。
+export function RateBarChart({
+  data,
+  numeratorLabel = '契約',
+  denominatorLabel = '新規',
+}: {
+  data: RateBar[];
+  numeratorLabel?: string;
+  denominatorLabel?: string;
+}) {
   if (data.length === 0) return null;
   const height = Math.max(120, data.length * 44);
   return (
@@ -27,7 +35,7 @@ export function RepeatBarChart({ data }: { data: RepeatBar[] }) {
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 4, right: 48, bottom: 4, left: 8 }}
+        margin={{ top: 4, right: 56, bottom: 4, left: 8 }}
         barCategoryGap={12}
       >
         <XAxis type="number" domain={[0, 100]} hide />
@@ -43,8 +51,8 @@ export function RepeatBarChart({ data }: { data: RepeatBar[] }) {
           cursor={{ fill: 'rgba(0,0,0,0.03)' }}
           contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #eee' }}
           formatter={(v: any, _n: any, p: any) => [
-            `${v}% (リピート ${p.payload.repeat} / 既存 ${p.payload.existing})`,
-            'リピート率',
+            `${v}% (${numeratorLabel} ${p.payload.numerator} / ${denominatorLabel} ${p.payload.denominator})`,
+            '比率',
           ]}
         />
         <Bar dataKey="rate" radius={[6, 6, 6, 6]} isAnimationActive animationDuration={600}>
