@@ -22,6 +22,7 @@ import {
   Ticket,
   CalendarDays,
   Scan,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -35,6 +36,8 @@ interface NavItem {
   showBadge?: boolean;
   // 店舗ロール (iPad / 店舗 PC) でも表示する項目
   storeAllowed?: boolean;
+  // admin / manager のみ表示する項目
+  managerOnly?: boolean;
 }
 interface NavGroup {
   label: string;
@@ -65,7 +68,8 @@ const navGroups: NavGroup[] = [
       { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
       { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
-      { href: '/goals', label: '目標管理', icon: Target },
+      { href: '/reports/analytics', label: 'リピート分析', icon: BarChart3, managerOnly: true },
+      { href: '/goals', label: '目標管理', icon: Target, managerOnly: true },
       { href: '/attendance', label: '勤怠', icon: MapPin },
     ],
   },
@@ -144,6 +148,7 @@ export function Sidebar({
   }, []);
 
   const isStore = staff.role === 'store';
+  const isManager = staff.role === 'admin' || staff.role === 'manager';
   const visibleGroups = navGroups
     .filter((g) => {
       // 店舗ロール: adminOnly グループは非表示
@@ -154,10 +159,21 @@ export function Sidebar({
     })
     .map((g) => ({
       ...g,
-      // 店舗ロール: storeAllowed=true の項目だけ表示
-      items: isStore ? g.items.filter((i) => i.storeAllowed) : g.items,
+      items: g.items.filter((i) => {
+        // 店舗ロール: storeAllowed=true の項目だけ表示
+        if (isStore) return i.storeAllowed;
+        // managerOnly の項目は admin / manager のみ
+        if (i.managerOnly && !isManager) return false;
+        return true;
+      }),
     }))
     .filter((g) => g.items.length > 0);
+
+  // 最も具体的に一致する項目だけをアクティブにする (例: /reports/analytics で 日報 が二重ハイライトしない)
+  const activeHref = visibleGroups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => (h === '/' ? pathname === '/' : pathname === h || pathname.startsWith(h + '/')))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <>
@@ -201,10 +217,7 @@ export function Sidebar({
               </p>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
-                  const active =
-                    item.href === '/'
-                      ? pathname === '/'
-                      : pathname.startsWith(item.href);
+                  const active = item.href === activeHref;
                   const Icon = item.icon;
                   const showBadge = item.showBadge && unread > 0;
                   return (

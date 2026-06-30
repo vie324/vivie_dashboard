@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { Sparkles, Loader2, Save, Plus } from 'lucide-react';
+import { Sparkles, Loader2, Save, Plus, ClipboardCopy, TrendingUp } from 'lucide-react';
 import { formatYen } from '@/lib/utils';
 
 interface Goal {
@@ -24,9 +24,34 @@ interface Goal {
   store?: { name: string } | null;
 }
 
+interface ReferenceRow {
+  month: string;
+  newTotal: number;
+  contractTotal: number;
+  sales: number;
+  repeatRate: number;
+  reportCount: number;
+}
+interface Reference {
+  months: ReferenceRow[];
+  lastMonth: {
+    month: string;
+    hpb_new_target: number;
+    meta_new_target: number;
+    minimo_new_target: number;
+    referral_new_target: number;
+    contract_target: number;
+    sales_target: number;
+    repeat_rate_target: number;
+    reportCount: number;
+  };
+  staffRepeat: { name: string; existing: number; repeat: number; rate: number }[];
+}
+
 interface Props {
   stores: { id: string; name: string }[];
   goals: Goal[];
+  reference?: Reference;
 }
 
 function nextMonth() {
@@ -35,7 +60,7 @@ function nextMonth() {
   return d.toISOString().slice(0, 7);
 }
 
-export function GoalsClient({ stores, goals }: Props) {
+export function GoalsClient({ stores, goals, reference }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [storeId, setStoreId] = useState(stores[0]?.id ?? '');
@@ -83,6 +108,22 @@ export function GoalsClient({ stores, goals }: Props) {
     } finally {
       setGenerating(false);
     }
+  }
+
+  function copyLastMonth() {
+    if (!reference) return;
+    const lm = reference.lastMonth;
+    setDraft((d) => ({
+      ...d,
+      hpb_new_target: lm.hpb_new_target,
+      meta_new_target: lm.meta_new_target,
+      minimo_new_target: lm.minimo_new_target,
+      referral_new_target: lm.referral_new_target,
+      contract_target: lm.contract_target,
+      sales_target: lm.sales_target,
+      repeat_rate_target: lm.repeat_rate_target,
+    }));
+    toast.show(`${lm.month} の実績を目標値に反映しました。必要に応じて調整してください`, 'success');
   }
 
   async function save() {
@@ -179,6 +220,78 @@ export function GoalsClient({ stores, goals }: Props) {
                 </ul>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 日報からの実績リファレンス */}
+      {reference && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="text-vivie-500" size={18} />
+              日報からの実績リファレンス
+            </CardTitle>
+            <p className="text-xs text-ink-500 mt-1">
+              直近の日報実績（全店舗集計）です。これを下敷きに、現実的な目標値を設定できます。
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th>月</th>
+                    <th className="text-right">新規</th>
+                    <th className="text-right">契約</th>
+                    <th className="text-right">売上</th>
+                    <th className="text-right">リピート率</th>
+                    <th className="text-right">日報数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reference.months.map((r) => (
+                    <tr key={r.month}>
+                      <td className="font-medium whitespace-nowrap">{r.month}</td>
+                      <td className="text-right">{r.newTotal}</td>
+                      <td className="text-right">{r.contractTotal}</td>
+                      <td className="text-right">{formatYen(r.sales)}</td>
+                      <td className="text-right font-medium text-vivie-700">{r.repeatRate}%</td>
+                      <td className="text-right text-ink-400">{r.reportCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {reference.staffRepeat.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-ink-500 mb-1.5">
+                  先月のスタッフ別リピート率 ({reference.lastMonth.month})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {reference.staffRepeat.map((s) => (
+                    <span
+                      key={s.name}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-ink-50 px-3 py-1.5 text-sm"
+                    >
+                      <span className="text-ink-700">{s.name}</span>
+                      <span className="font-semibold text-vivie-700">{s.rate}%</span>
+                      <span className="text-[11px] text-ink-400">
+                        ({s.repeat}/{s.existing})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button variant="secondary" size="sm" onClick={copyLastMonth}>
+                <ClipboardCopy size={14} />
+                先月の実績を目標値にコピー
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

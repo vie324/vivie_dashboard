@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Users, Megaphone, Activity } from 'lucide-react';
 import { formatYen, todayISO } from '@/lib/utils';
+import { MonthPicker } from '@/components/dashboard/month-picker';
+import { RepeatBarChart } from '@/components/reports/repeat-bar-chart';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +50,16 @@ export default async function ReportsAnalyticsPage({
   const mediaHasData = mediaRows.some((m) => m.existing > 0);
   const derivedRows = (derived ?? []) as any[];
 
+  const staffBars = byStaff.map((s) => ({
+    name: s.staffName,
+    rate: s.repeatRate,
+    existing: s.existing,
+    repeat: s.repeat,
+  }));
+  const mediaBars = mediaRows
+    .filter((m) => m.existing > 0)
+    .map((m) => ({ name: m.label, rate: m.rate, existing: m.existing, repeat: m.repeat }));
+
   return (
     <div className="space-y-6 animate-fade-in-up max-w-5xl">
       <Link
@@ -59,7 +71,8 @@ export default async function ReportsAnalyticsPage({
       </Link>
       <PageHeader
         title="リピート率分析"
-        description={`${month} のリピート率をスタッフ別・媒体別に可視化します`}
+        description="リピート率をスタッフ別・媒体別に可視化します"
+        actions={<MonthPicker value={month} />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -81,6 +94,10 @@ export default async function ReportsAnalyticsPage({
           {byStaff.length === 0 ? (
             <p className="px-5 py-6 text-sm text-ink-400 text-center">この月の日報がありません</p>
           ) : (
+            <>
+            <div className="px-4 pt-4">
+              <RepeatBarChart data={staffBars} />
+            </div>
             <table className="table-base">
               <thead>
                 <tr>
@@ -114,6 +131,7 @@ export default async function ReportsAnalyticsPage({
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </CardContent>
       </Card>
@@ -135,6 +153,10 @@ export default async function ReportsAnalyticsPage({
               媒体別の内訳がまだ入力されていません。日報の「媒体別リピート内訳 (任意)」に入力すると集計されます。
             </p>
           ) : (
+            <>
+            <div className="px-4 pt-4">
+              <RepeatBarChart data={mediaBars} />
+            </div>
             <table className="table-base">
               <thead>
                 <tr>
@@ -166,6 +188,7 @@ export default async function ReportsAnalyticsPage({
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </CardContent>
       </Card>
