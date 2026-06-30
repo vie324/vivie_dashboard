@@ -28,6 +28,7 @@ interface ReferenceRow {
   month: string;
   newTotal: number;
   contractTotal: number;
+  contractRate: number;
   sales: number;
   repeatRate: number;
   reportCount: number;
@@ -45,7 +46,7 @@ interface Reference {
     repeat_rate_target: number;
     reportCount: number;
   };
-  staffRepeat: { name: string; existing: number; repeat: number; rate: number }[];
+  staffContract: { name: string; newCount: number; contract: number; rate: number }[];
 }
 
 interface Props {
@@ -244,8 +245,8 @@ export function GoalsClient({ stores, goals, reference }: Props) {
                     <th>月</th>
                     <th className="text-right">新規</th>
                     <th className="text-right">契約</th>
+                    <th className="text-right">契約率</th>
                     <th className="text-right">売上</th>
-                    <th className="text-right">リピート率</th>
                     <th className="text-right">日報数</th>
                   </tr>
                 </thead>
@@ -255,8 +256,8 @@ export function GoalsClient({ stores, goals, reference }: Props) {
                       <td className="font-medium whitespace-nowrap">{r.month}</td>
                       <td className="text-right">{r.newTotal}</td>
                       <td className="text-right">{r.contractTotal}</td>
+                      <td className="text-right font-medium text-vivie-700">{r.contractRate}%</td>
                       <td className="text-right">{formatYen(r.sales)}</td>
-                      <td className="text-right font-medium text-vivie-700">{r.repeatRate}%</td>
                       <td className="text-right text-ink-400">{r.reportCount}</td>
                     </tr>
                   ))}
@@ -264,13 +265,13 @@ export function GoalsClient({ stores, goals, reference }: Props) {
               </table>
             </div>
 
-            {reference.staffRepeat.length > 0 && (
+            {reference.staffContract.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-ink-500 mb-1.5">
-                  先月のスタッフ別リピート率 ({reference.lastMonth.month})
+                  先月のスタッフ別契約率 ({reference.lastMonth.month})
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {reference.staffRepeat.map((s) => (
+                  {reference.staffContract.map((s) => (
                     <span
                       key={s.name}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-ink-50 px-3 py-1.5 text-sm"
@@ -278,7 +279,7 @@ export function GoalsClient({ stores, goals, reference }: Props) {
                       <span className="text-ink-700">{s.name}</span>
                       <span className="font-semibold text-vivie-700">{s.rate}%</span>
                       <span className="text-[11px] text-ink-400">
-                        ({s.repeat}/{s.existing})
+                        (契約{s.contract}/新規{s.newCount})
                       </span>
                     </span>
                   ))}

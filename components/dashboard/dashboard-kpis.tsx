@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { PeriodTabs, periodRange, type PeriodKey } from './period-tabs';
 import { KpiCard } from './kpi-card';
-import { Users, TrendingUp, Wallet, FileBarChart2, Loader2, CreditCard, Ticket, Coins } from 'lucide-react';
+import { Users, TrendingUp, Wallet, Handshake, Loader2, CreditCard, Ticket, Coins } from 'lucide-react';
 import { formatYen } from '@/lib/utils';
 import type { MetricsSummary } from '@/app/api/metrics/summary/route';
 
@@ -66,10 +66,10 @@ export function DashboardKpis({ initial }: { initial: MetricsSummary }) {
           tone="green"
         />
         <KpiCard
-          label="リピート率"
-          value={`${data.repeatRate}%`}
-          hint={`既存${data.existing}件中 ${data.repeat}件`}
-          icon={<FileBarChart2 size={18} />}
+          label="契約率"
+          value={`${data.contractRate}%`}
+          hint={`新規${data.newCount}名 → 契約${data.contractCount}件`}
+          icon={<Handshake size={18} />}
           tone="blue"
         />
       </div>

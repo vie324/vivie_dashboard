@@ -4,7 +4,7 @@ import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { GoalsClient } from '@/components/goals/goals-client';
 import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
-import { getGoalProgress, getRepeatRateByStaff } from '@/lib/goals';
+import { getGoalProgress, getStaffPerformance } from '@/lib/goals';
 import { todayISO } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -35,12 +35,12 @@ export default async function GoalsPage() {
 
   const storeList = (stores ?? []) as { id: string; name: string }[];
   // 当月の達成状況 (全店舗 + 店舗別) + 目標設定の下敷きにする直近実績
-  const [allProgress, prevProgress, prev2Progress, prevStaffRepeat, ...storeProgresses] =
+  const [allProgress, prevProgress, prev2Progress, prevStaffPerf, ...storeProgresses] =
     await Promise.all([
       getGoalProgress(supabase, { month: currentMonth }),
       getGoalProgress(supabase, { month: prevMonth }),
       getGoalProgress(supabase, { month: prev2Month }),
-      getRepeatRateByStaff(supabase, { month: prevMonth }),
+      getStaffPerformance(supabase, { month: prevMonth }),
       ...storeList.map((s) => getGoalProgress(supabase, { month: currentMonth, storeId: s.id })),
     ]);
 
@@ -49,6 +49,7 @@ export default async function GoalsPage() {
     month: p.month,
     newTotal: p.actuals.newTotal,
     contractTotal: p.actuals.contractTotal,
+    contractRate: p.actuals.contractRate,
     sales: p.actuals.sales,
     repeatRate: p.actuals.repeatRate,
     reportCount: p.actuals.reportCount,
@@ -67,12 +68,14 @@ export default async function GoalsPage() {
       repeat_rate_target: prevProgress.actuals.repeatRate,
       reportCount: prevProgress.actuals.reportCount,
     },
-    staffRepeat: prevStaffRepeat.map((s) => ({
-      name: s.staffName,
-      existing: s.existing,
-      repeat: s.repeat,
-      rate: s.repeatRate,
-    })),
+    staffContract: prevStaffPerf
+      .filter((s) => s.newCount > 0)
+      .map((s) => ({
+        name: s.staffName,
+        newCount: s.newCount,
+        contract: s.contract,
+        rate: s.contractRate,
+      })),
   };
 
   return (

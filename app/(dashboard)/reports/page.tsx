@@ -10,8 +10,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { CopyButton } from '@/components/ui/copy-button';
 import { FileBarChart2, Plus, ExternalLink, BarChart3, Users } from 'lucide-react';
 import { formatDate, formatYen, todayISO, getAppUrl } from '@/lib/utils';
-import { getRepeatRateByStaff } from '@/lib/goals';
-import { RepeatBarChart } from '@/components/reports/repeat-bar-chart';
+import { getStaffPerformance } from '@/lib/goals';
+import { RateBarChart } from '@/components/reports/rate-bar-chart';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,21 +43,29 @@ export default async function ReportsPage() {
           .order('display_name')
       : Promise.resolve({ data: [] as any[] }),
     isManager
-      ? getRepeatRateByStaff(supabase, { month: todayISO().slice(0, 7) })
+      ? getStaffPerformance(supabase, { month: todayISO().slice(0, 7) })
       : Promise.resolve([]),
   ]);
 
-  const staffRepeatBars = staffRepeat.map((s) => ({
-    name: s.staffName,
-    rate: s.repeatRate,
-    existing: s.existing,
-    repeat: s.repeat,
-  }));
+  const staffContractBars = staffRepeat
+    .filter((s) => s.newCount > 0)
+    .map((s) => ({
+      name: s.staffName,
+      rate: s.contractRate,
+      numerator: s.contract,
+      denominator: s.newCount,
+    }));
 
-  const totalExisting = (reports ?? []).reduce((sum: number, r: any) => sum + r.existing_treatment_count, 0);
-  const totalRepeat = (reports ?? []).reduce((sum: number, r: any) => sum + r.repeat_count, 0);
-  const repeatRate = totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0;
   const totalSales = (reports ?? []).reduce((sum: number, r: any) => sum + r.total_sales, 0);
+  const totalNew = (reports ?? []).reduce(
+    (sum: number, r: any) =>
+      sum +
+      r.hpb_new_count +
+      r.meta_new_count +
+      (r.minimo_new_count ?? 0) +
+      r.referral_new_count,
+    0,
+  );
   const totalContracts = (reports ?? []).reduce(
     (sum: number, r: any) =>
       sum +
@@ -67,6 +75,7 @@ export default async function ReportsPage() {
       r.referral_contract_count,
     0,
   );
+  const contractRate = totalNew > 0 ? Math.round((totalContracts / totalNew) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -79,7 +88,7 @@ export default async function ReportsPage() {
               <Link href="/reports/analytics">
                 <Button size="sm" variant="secondary">
                   <BarChart3 size={14} />
-                  リピート分析
+                  集客・契約分析
                 </Button>
               </Link>
             )}
@@ -94,25 +103,25 @@ export default async function ReportsPage() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="今月の日報数" value={`${(reports ?? []).length} 件`} />
-        <Stat label="今月のリピート率" value={`${repeatRate}%`} hint={`既存${totalExisting} / リピート${totalRepeat}`} />
+        <Stat label="今月の新規来店" value={`${totalNew} 名`} />
+        <Stat label="今月の契約率" value={`${contractRate}%`} hint={`新規${totalNew} → 契約${totalContracts}`} />
         <Stat label="今月の契約数" value={`${totalContracts} 件`} hint="日報の媒体別契約の合計" />
         <Stat label="今月の合計売上" value={formatYen(totalSales)} />
       </div>
 
-      {isManager && staffRepeatBars.length > 0 && (
+      {isManager && staffContractBars.length > 0 && (
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Users size={18} className="text-vivie-500" />
-              スタッフ別 リピート率 (今月)
+              スタッフ別 契約率 (今月)
             </CardTitle>
             <Link href="/reports/analytics" className="text-xs text-vivie-600 hover:underline">
               媒体別など詳しく見る →
             </Link>
           </CardHeader>
           <CardContent>
-            <RepeatBarChart data={staffRepeatBars} />
+            <RateBarChart data={staffContractBars} numeratorLabel="契約" denominatorLabel="新規" />
           </CardContent>
         </Card>
       )}

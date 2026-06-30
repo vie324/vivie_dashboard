@@ -68,7 +68,7 @@ const navGroups: NavGroup[] = [
       { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
       { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
-      { href: '/reports/analytics', label: 'リピート分析', icon: BarChart3, managerOnly: true },
+      { href: '/reports/analytics', label: '集客・契約分析', icon: BarChart3, managerOnly: true },
       { href: '/goals', label: '目標管理', icon: Target, managerOnly: true },
       { href: '/attendance', label: '勤怠', icon: MapPin },
     ],
