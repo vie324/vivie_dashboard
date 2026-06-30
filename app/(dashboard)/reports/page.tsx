@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CopyButton } from '@/components/ui/copy-button';
-import { FileBarChart2, Plus, ExternalLink, BarChart3 } from 'lucide-react';
+import { FileBarChart2, Plus, ExternalLink, BarChart3, Users } from 'lucide-react';
 import { formatDate, formatYen, todayISO, getAppUrl } from '@/lib/utils';
+import { getRepeatRateByStaff } from '@/lib/goals';
+import { RepeatBarChart } from '@/components/reports/repeat-bar-chart';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +33,7 @@ export default async function ReportsPage() {
     .limit(200);
   if (!isManager) reportsQuery.eq('staff_id', staff.id);
 
-  const [{ data: reports }, { data: allStaff }] = await Promise.all([
+  const [{ data: reports }, { data: allStaff }, staffRepeat] = await Promise.all([
     reportsQuery,
     isManager
       ? supabase
@@ -40,7 +42,17 @@ export default async function ReportsPage() {
           .eq('is_active', true)
           .order('display_name')
       : Promise.resolve({ data: [] as any[] }),
+    isManager
+      ? getRepeatRateByStaff(supabase, { month: todayISO().slice(0, 7) })
+      : Promise.resolve([]),
   ]);
+
+  const staffRepeatBars = staffRepeat.map((s) => ({
+    name: s.staffName,
+    rate: s.repeatRate,
+    existing: s.existing,
+    repeat: s.repeat,
+  }));
 
   const totalExisting = (reports ?? []).reduce((sum: number, r: any) => sum + r.existing_treatment_count, 0);
   const totalRepeat = (reports ?? []).reduce((sum: number, r: any) => sum + r.repeat_count, 0);
@@ -87,6 +99,23 @@ export default async function ReportsPage() {
         <Stat label="今月の契約数" value={`${totalContracts} 件`} hint="日報の媒体別契約の合計" />
         <Stat label="今月の合計売上" value={formatYen(totalSales)} />
       </div>
+
+      {isManager && staffRepeatBars.length > 0 && (
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users size={18} className="text-vivie-500" />
+              スタッフ別 リピート率 (今月)
+            </CardTitle>
+            <Link href="/reports/analytics" className="text-xs text-vivie-600 hover:underline">
+              媒体別など詳しく見る →
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <RepeatBarChart data={staffRepeatBars} />
+          </CardContent>
+        </Card>
+      )}
 
       {isManager && (allStaff ?? []).length > 0 && (
         <Card>

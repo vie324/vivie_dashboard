@@ -4,10 +4,16 @@ import { getCurrentStaff } from '@/lib/auth';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { GoalsClient } from '@/components/goals/goals-client';
 import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
-import { getGoalProgress } from '@/lib/goals';
+import { getGoalProgress, getRepeatRateByStaff } from '@/lib/goals';
 import { todayISO } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+
+// YYYY-MM を delta か月ずらす
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
 
 export default async function GoalsPage() {
   const staff = await getCurrentStaff();
@@ -16,6 +22,8 @@ export default async function GoalsPage() {
 
   const supabase = createClient();
   const currentMonth = todayISO().slice(0, 7);
+  const prevMonth = addMonths(currentMonth, -1);
+  const prev2Month = addMonths(currentMonth, -2);
   const [{ data: stores }, { data: goals }] = await Promise.all([
     supabase.from('stores').select('id, name').eq('is_active', true).order('name'),
     supabase
@@ -26,11 +34,46 @@ export default async function GoalsPage() {
   ]);
 
   const storeList = (stores ?? []) as { id: string; name: string }[];
-  // 当月の達成状況 (全店舗 + 店舗別)
-  const [allProgress, ...storeProgresses] = await Promise.all([
-    getGoalProgress(supabase, { month: currentMonth }),
-    ...storeList.map((s) => getGoalProgress(supabase, { month: currentMonth, storeId: s.id })),
-  ]);
+  // 当月の達成状況 (全店舗 + 店舗別) + 目標設定の下敷きにする直近実績
+  const [allProgress, prevProgress, prev2Progress, prevStaffRepeat, ...storeProgresses] =
+    await Promise.all([
+      getGoalProgress(supabase, { month: currentMonth }),
+      getGoalProgress(supabase, { month: prevMonth }),
+      getGoalProgress(supabase, { month: prev2Month }),
+      getRepeatRateByStaff(supabase, { month: prevMonth }),
+      ...storeList.map((s) => getGoalProgress(supabase, { month: currentMonth, storeId: s.id })),
+    ]);
+
+  // GoalsClient に渡す「日報実績リファレンス」(全店舗集計)
+  const toRow = (p: typeof allProgress) => ({
+    month: p.month,
+    newTotal: p.actuals.newTotal,
+    contractTotal: p.actuals.contractTotal,
+    sales: p.actuals.sales,
+    repeatRate: p.actuals.repeatRate,
+    reportCount: p.actuals.reportCount,
+  });
+  const reference = {
+    months: [toRow(prev2Progress), toRow(prevProgress), toRow(allProgress)],
+    // 先月実績 → 目標ドラフトに反映する用
+    lastMonth: {
+      month: prevMonth,
+      hpb_new_target: prevProgress.actuals.hpbNew,
+      meta_new_target: prevProgress.actuals.metaNew,
+      minimo_new_target: prevProgress.actuals.minimoNew,
+      referral_new_target: prevProgress.actuals.referralNew,
+      contract_target: prevProgress.actuals.contractTotal,
+      sales_target: prevProgress.actuals.sales,
+      repeat_rate_target: prevProgress.actuals.repeatRate,
+      reportCount: prevProgress.actuals.reportCount,
+    },
+    staffRepeat: prevStaffRepeat.map((s) => ({
+      name: s.staffName,
+      existing: s.existing,
+      repeat: s.repeat,
+      rate: s.repeatRate,
+    })),
+  };
 
   return (
     <div className="space-y-6 animate-fade-in-up max-w-4xl">
@@ -61,7 +104,11 @@ export default async function GoalsPage() {
         )}
       </section>
 
-      <GoalsClient stores={storeList as any} goals={(goals ?? []) as any} />
+      <GoalsClient
+        stores={storeList as any}
+        goals={(goals ?? []) as any}
+        reference={reference}
+      />
     </div>
   );
 }
