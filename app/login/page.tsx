@@ -39,7 +39,7 @@ function LoginForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-sm rounded-3xl border border-ink-100 bg-white p-8 shadow-xl shadow-vivie-100/40"
+      className="w-full max-w-sm animate-scale-in rounded-3xl border border-ink-100 bg-white/90 p-8 shadow-glow backdrop-blur"
     >
       <div className="mb-6 flex flex-col items-center text-center">
         <LogoIcon size="lg" asImage className="mb-3" />
@@ -49,7 +49,8 @@ function LoginForm() {
         >
           vivie
         </h1>
-        <p className="mt-2 text-sm text-ink-500">スタッフアカウントでログイン</p>
+        <span className="gold-rule mx-auto mt-2 !w-16 bg-gradient-to-r from-transparent via-gold-400 to-transparent" aria-hidden />
+        <p className="mt-3 text-sm text-ink-500">スタッフアカウントでログイン</p>
       </div>
 
       <div className="space-y-4">
@@ -91,7 +92,16 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-vivie-100 via-vivie-50 to-white px-4">
+      {/* 柔らかな装飾光 */}
+      <div
+        className="pointer-events-none absolute -top-32 -right-32 h-96 w-96 rounded-full bg-gold-200/40 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-vivie-200/50 blur-3xl"
+        aria-hidden
+      />
       <Suspense fallback={null}>
         <LoginForm />
       </Suspense>

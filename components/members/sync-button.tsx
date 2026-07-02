@@ -24,6 +24,8 @@ export function SquareSyncButton() {
       if (body.members) parts.push(`会員 ${body.members}件`);
       if (body.subscriptions) parts.push(`サブスク ${body.subscriptions}件`);
       if (body.plans) parts.push(`プラン ${body.plans}件`);
+      if (body.payments) parts.push(`決済 ${body.payments}件`);
+      if (body.refunds) parts.push(`返金 ${body.refunds}件`);
       const warnings = (body.warnings ?? []) as string[];
 
       // 警告は最大 3 件まで集約。コンソールには全件出す。

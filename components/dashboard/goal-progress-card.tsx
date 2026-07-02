@@ -90,14 +90,18 @@ function MetricRow({ metric }: { metric: GoalMetric }) {
               {pct}%
             </span>
           )}
+          {!hasTarget && <span className="ml-2 text-[10px] text-ink-300">参考値</span>}
         </span>
       </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
-        <div
-          className={`h-full rounded-full transition-all ${barTone(pct)}`}
-          style={{ width: `${hasTarget ? barWidth : 0}%` }}
-        />
-      </div>
+      {/* 目標未設定の指標は空のバーを出さない (未達成に見えてしまうため) */}
+      {hasTarget && (
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-100">
+          <div
+            className={`h-full rounded-full transition-all animate-bar-grow ${barTone(pct)}`}
+            style={{ width: `${barWidth}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -30,6 +30,8 @@ export function RateBarChart({
 }) {
   if (data.length === 0) return null;
   const height = Math.max(120, data.length * 44);
+  // 契約が翌日以降に決まると 100% 超もあり得るため、ドメインを実データに合わせて広げる
+  const maxRate = Math.max(100, ...data.map((d) => d.rate));
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
@@ -38,7 +40,7 @@ export function RateBarChart({
         margin={{ top: 4, right: 56, bottom: 4, left: 8 }}
         barCategoryGap={12}
       >
-        <XAxis type="number" domain={[0, 100]} hide />
+        <XAxis type="number" domain={[0, maxRate]} hide />
         <YAxis
           type="category"
           dataKey="name"

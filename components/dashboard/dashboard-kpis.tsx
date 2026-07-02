@@ -1,35 +1,50 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { PeriodTabs, periodRange, type PeriodKey } from './period-tabs';
 import { KpiCard } from './kpi-card';
-import { Users, TrendingUp, Wallet, Handshake, Loader2, CreditCard, Ticket, Coins } from 'lucide-react';
+import {
+  Users,
+  TrendingUp,
+  Wallet,
+  Handshake,
+  Loader2,
+  CreditCard,
+  Ticket,
+  Coins,
+  FileBarChart2,
+} from 'lucide-react';
 import { formatYen } from '@/lib/utils';
 import type { MetricsSummary } from '@/app/api/metrics/summary/route';
 
 // 期間タブの切り替えで KPI を実際に再取得する。
-// 以前はタブを押しても children が今月固定で再取得されず「数字が変わらない」状態だった。
 export function DashboardKpis({ initial }: { initial: MetricsSummary }) {
   const [period, setPeriod] = useState<PeriodKey>('month');
   const [data, setData] = useState<MetricsSummary>(initial);
   const [loading, setLoading] = useState(false);
+  // 連打時に古いレスポンスで上書きされないようリクエスト世代を持つ
+  const requestSeq = useRef(0);
 
   async function changePeriod(p: PeriodKey) {
     setPeriod(p);
     setLoading(true);
+    const seq = ++requestSeq.current;
     try {
       const { from, to } = periodRange(p);
       const res = await fetch(`/api/metrics/summary?from=${from}&to=${to}`, {
         cache: 'no-store',
       });
-      if (res.ok) {
+      if (res.ok && seq === requestSeq.current) {
         setData(await res.json());
       }
     } catch {
       // ネットワークエラー時は直前の値を保持
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
+
+  const delta = data.netIncome - data.reportedSales;
 
   return (
     <div className="space-y-3">
@@ -45,25 +60,33 @@ export function DashboardKpis({ initial }: { initial: MetricsSummary }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="総会員数"
-          value={data.totalMembers}
-          hint={`アクティブ ${data.activeMembers}名`}
-          icon={<Users size={18} />}
-          tone="rose"
+          label="売上 (決済ベース)"
+          value={formatYen(data.netIncome)}
+          hint={
+            data.refunds > 0
+              ? `決済 ${formatYen(data.income)} − 返金 ${formatYen(data.refunds)}`
+              : `支出 ${formatYen(data.expense)} ・ 差引 ${formatYen(data.income - data.expense)}`
+          }
+          icon={<Wallet size={18} />}
+          tone="green"
+        />
+        <KpiCard
+          label="日報売上 (値引後)"
+          value={formatYen(data.reportedSales)}
+          hint={
+            data.reportedSales > 0 || data.netIncome > 0
+              ? `決済との差異 ${delta >= 0 ? '+' : ''}${formatYen(delta)}`
+              : '日報が未入力です'
+          }
+          icon={<FileBarChart2 size={18} />}
+          tone="amber"
         />
         <KpiCard
           label="サブスク継続"
           value={data.activeSubs}
-          hint="Square 連携"
+          hint="Square 連携 (アクティブ契約)"
           icon={<TrendingUp size={18} />}
-          tone="amber"
-        />
-        <KpiCard
-          label="売上"
-          value={formatYen(data.income)}
-          hint={`支出 ${formatYen(data.expense)} ・ 差引 ${formatYen(data.income - data.expense)}`}
-          icon={<Wallet size={18} />}
-          tone="green"
+          tone="rose"
         />
         <KpiCard
           label="契約率"
@@ -74,27 +97,41 @@ export function DashboardKpis({ initial }: { initial: MetricsSummary }) {
         />
       </div>
 
-      {/* 売上の内訳 (サブスク / 回数券 / その他) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* 売上の内訳 (決済ベース: サブスク / 回数券 / その他) + 会員数 */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <BreakdownCard
           label="サブスク売上"
-          value={data.subscriptionIncome}
+          value={formatYen(data.subscriptionIncome)}
           icon={<CreditCard size={16} />}
           tone="bg-violet-50 text-violet-700"
         />
         <BreakdownCard
           label="回数券売上"
-          value={data.ticketIncome}
+          value={formatYen(data.ticketIncome)}
           icon={<Ticket size={16} />}
           tone="bg-amber-50 text-amber-700"
         />
         <BreakdownCard
           label="単発・その他売上"
-          value={data.otherIncome}
+          value={formatYen(data.otherIncome)}
           icon={<Coins size={16} />}
           tone="bg-emerald-50 text-emerald-700"
         />
+        <BreakdownCard
+          label="総会員数"
+          value={`${data.totalMembers}名 (アクティブ ${data.activeMembers})`}
+          icon={<Users size={16} />}
+          tone="bg-sky-50 text-sky-700"
+        />
       </div>
+
+      <p className="px-1 text-[11px] text-ink-400">
+        決済ベース = Square 決済 + 出納帳の入金記録。日報売上との差異が大きい日は
+        <Link href="/sales" className="mx-1 text-vivie-600 hover:underline">
+          売上分析
+        </Link>
+        で日別に照合できます。
+      </p>
     </div>
   );
 }
@@ -106,7 +143,7 @@ function BreakdownCard({
   tone,
 }: {
   label: string;
-  value: number;
+  value: string;
   icon: React.ReactNode;
   tone: string;
 }) {
@@ -117,7 +154,7 @@ function BreakdownCard({
       </span>
       <div className="min-w-0">
         <p className="text-xs font-medium text-ink-500">{label}</p>
-        <p className="font-serif text-lg font-semibold text-ink-900">{formatYen(value)}</p>
+        <p className="truncate font-serif text-lg font-semibold text-ink-900">{value}</p>
       </div>
     </div>
   );

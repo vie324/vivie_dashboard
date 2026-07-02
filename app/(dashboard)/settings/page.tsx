@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentStaff } from '@/lib/auth';
@@ -8,7 +7,6 @@ import { StaffSettings } from '@/components/settings/staff-settings';
 import { StaffInviteForm } from '@/components/settings/staff-invite-form';
 import { CounselingSettings } from '@/components/settings/counseling-settings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { getAppUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -60,23 +58,6 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <StaffSettings staff={(allStaff ?? []) as any} stores={(stores ?? []) as any} canEdit={staff.role === 'admin'} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Gmail 連携 (予約自動取り込み)</CardTitle>
-          <Link href="/settings/gmail">
-            <Button size="sm" variant="secondary">
-              詳細設定 →
-            </Button>
-          </Link>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-ink-600">
-            HPB / minimo の予約通知メールを Gmail Pub/Sub プッシュで自動取り込み。
-            平均 5–30 秒の遅延で <code>reservations</code> テーブルに自動登録されます。
-          </p>
         </CardContent>
       </Card>
 

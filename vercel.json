@@ -4,8 +4,8 @@
   "github": { "silent": true },
   "crons": [
     {
-      "path": "/api/gmail/watch?cron=1",
-      "schedule": "0 3 */6 * *"
+      "path": "/api/square/sync?cron=1",
+      "schedule": "0 20 * * *"
     }
   ]
 }

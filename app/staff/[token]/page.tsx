@@ -6,7 +6,7 @@ import { FileBarChart2, MapPin, ChevronRight } from 'lucide-react';
 import { LogoIcon } from '@/components/ui/logo';
 import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
 import { getGoalProgress } from '@/lib/goals';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, todayISO } from '@/lib/utils';
 import { kindLabel } from '@/lib/attendance';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,8 @@ export default async function StaffHubPage({ params }: { params: { token: string
     .maybeSingle();
   if (!staff || !staff.is_active) notFound();
 
-  const today = new Date().toISOString().slice(0, 10);
+  // JST の暦日 (UTC サーバーで深夜 0-9 時に前日へズレるのを防ぐ)
+  const today = todayISO();
   const month = today.slice(0, 7);
   const [{ data: todayReport }, { data: lastClock }, goalProgress] = await Promise.all([
     supabase

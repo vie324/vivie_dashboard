@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentStaff } from '@/lib/auth';
 import { todayISO, monthRange } from '@/lib/utils';
+import { REFUND_CATEGORY } from '@/lib/square/payments';
 
 export const dynamic = 'force-dynamic';
 
 // ダッシュボードの期間別 KPI を返す。期間タブ (今日/今週/今月/先月) の切り替えで
 // クライアントから from/to (YYYY-MM-DD, 両端含む) を指定して再取得する。
+//
+// 売上は 2 系統を返す:
+//   income        = 出納帳ベース (Square 決済 + 手動記帳) — 実際にお金が動いた数字
+//   reportedSales = スタッフ日報の申告売上 — 現場の報告ベース
+// 両者の差 (reconciliation) が照合の起点になる。
 export type MetricsSummary = {
   from: string;
   to: string;
@@ -13,6 +20,9 @@ export type MetricsSummary = {
   activeMembers: number;
   activeSubs: number;
   income: number;
+  refunds: number;
+  netIncome: number;
+  reportedSales: number;
   subscriptionIncome: number;
   ticketIncome: number;
   otherIncome: number;
@@ -27,10 +37,12 @@ export type MetricsSummary = {
 
 export async function GET(request: NextRequest) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const staff = await getCurrentStaff();
+  if (!staff) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  // 店舗共有端末 (store ロール) には財務 KPI を出さない
+  if (staff.role === 'store') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const sp = request.nextUrl.searchParams;
   const defMonth = monthRange(todayISO().slice(0, 7));
@@ -49,13 +61,13 @@ export async function GET(request: NextRequest) {
       .in('status', ['ACTIVE', 'active']),
     supabase
       .from('cashbook_entries')
-      .select('amount, entry_type, sale_kind')
+      .select('amount, entry_type, sale_kind, category')
       .gte('entry_date', from)
       .lte('entry_date', to),
     supabase
       .from('daily_reports')
       .select(
-        'existing_treatment_count, repeat_count, hpb_new_count, hpb_contract_count,' +
+        'total_sales, discount_total, existing_treatment_count, repeat_count, hpb_new_count, hpb_contract_count,' +
           ' meta_new_count, meta_contract_count, minimo_new_count, minimo_contract_count,' +
           ' referral_new_count, referral_contract_count',
       )
@@ -67,21 +79,28 @@ export async function GET(request: NextRequest) {
     amount: number;
     entry_type: string;
     sale_kind: string | null;
+    category: string | null;
   }[];
   const income = cash.filter((e) => e.entry_type === 'income');
+  const refundRows = cash.filter(
+    (e) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY,
+  );
   const totalIncome = income.reduce((s, e) => s + e.amount, 0);
-  const subscriptionIncome = income
-    .filter((e) => e.sale_kind === 'subscription')
-    .reduce((s, e) => s + e.amount, 0);
-  const ticketIncome = income
-    .filter((e) => e.sale_kind === 'ticket')
-    .reduce((s, e) => s + e.amount, 0);
+  const refunds = refundRows.reduce((s, e) => s + e.amount, 0);
+  // 内訳は区分ごとの返金も控除した純額で返す (内訳の合計 = netIncome になる)
+  const kindNet = (kind: string) =>
+    income.filter((e) => e.sale_kind === kind).reduce((s, e) => s + e.amount, 0) -
+    refundRows.filter((e) => e.sale_kind === kind).reduce((s, e) => s + e.amount, 0);
+  const subscriptionIncome = kindNet('subscription');
+  const ticketIncome = kindNet('ticket');
   const expense = cash
     .filter((e) => e.entry_type === 'expense')
     .reduce((s, e) => s + e.amount, 0);
 
   const reports = (reportRes.data ?? []) as any[];
   const sumCol = (col: string) => reports.reduce((s: number, r: any) => s + (r[col] ?? 0), 0);
+  // 決済ベースと比較できるよう値引後で揃える (売上分析ページと同じ定義)
+  const reportedSales = sumCol('total_sales') - sumCol('discount_total');
   const existing = sumCol('existing_treatment_count');
   const repeat = sumCol('repeat_count');
   const newCount =
@@ -102,9 +121,12 @@ export async function GET(request: NextRequest) {
     activeMembers: activeMembersRes.count ?? 0,
     activeSubs: activeSubsRes.count ?? 0,
     income: totalIncome,
+    refunds,
+    netIncome: totalIncome - refunds,
+    reportedSales,
     subscriptionIncome,
     ticketIncome,
-    otherIncome: totalIncome - subscriptionIncome - ticketIncome,
+    otherIncome: totalIncome - refunds - subscriptionIncome - ticketIncome,
     expense,
     newCount,
     contractCount,

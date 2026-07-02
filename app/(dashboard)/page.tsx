@@ -8,8 +8,9 @@ import { DashboardKpis } from '@/components/dashboard/dashboard-kpis';
 import type { MetricsSummary } from '@/app/api/metrics/summary/route';
 import { StoreHome } from '@/components/dashboard/store-home';
 import { GoalProgressCard } from '@/components/dashboard/goal-progress-card';
-import { Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle, CalendarDays } from 'lucide-react';
-import { formatYen, formatDate, todayISO, monthRange } from '@/lib/utils';
+import { Wallet, FileBarChart2, ClipboardList, Activity, CalendarRange, AlertTriangle } from 'lucide-react';
+import { formatYen, formatDate, todayISO, monthRange, ymd } from '@/lib/utils';
+import { REFUND_CATEGORY } from '@/lib/square/payments';
 import { getCurrentStaff } from '@/lib/auth';
 import { getGoalProgress } from '@/lib/goals';
 
@@ -25,25 +26,9 @@ export default async function DashboardHome() {
   const month = today.slice(0, 7);
   const { start: monthStart, endExclusive: monthEndExclusive } = monthRange(month);
 
-  // 期間別データはクライアント側で再取得するので、ここでは初期表示用 (今月)
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
-
   // 店舗ロール (iPad / 店舗 PC) は専用のシンプルなトップを表示
   if (staff.role === 'store') {
-    const [{ data: todayReservations }, { data: expiringTickets }, goalProgress] = await Promise.all([
-      supabase
-        .from('reservation_overview')
-        .select(
-          'id, customer_name, member_full_name, member_picture, reservation_at, duration_minutes, menu, source, status, staff_name',
-        )
-        .gte('reservation_at', todayStart.toISOString())
-        .lte('reservation_at', todayEnd.toISOString())
-        .neq('status', 'cancelled')
-        .neq('status', 'no_show')
-        .order('reservation_at', { ascending: true }),
+    const [{ data: expiringTickets }, goalProgress] = await Promise.all([
       supabase
         .from('ticket_overview')
         .select(
@@ -59,7 +44,6 @@ export default async function DashboardHome() {
     return (
       <StoreHome
         staff={staff}
-        todayReservations={(todayReservations ?? []) as any[]}
         expiringTickets={(expiringTickets ?? []) as any[]}
         goalProgress={goalProgress}
       />
@@ -75,9 +59,9 @@ export default async function DashboardHome() {
     counselingRes,
     recentVisitsRes,
     recentTreatmentsRes,
+    monthTreatmentCountRes,
     dailySalesRes,
     expiringTicketsRes,
-    todayReservationsRes,
     goalProgress,
   ] = await Promise.all([
     supabase.from('members').select('id', { count: 'exact', head: true }),
@@ -89,24 +73,27 @@ export default async function DashboardHome() {
       .from('member_subscriptions')
       .select('id', { count: 'exact', head: true })
       .in('status', ['ACTIVE', 'active']),
+    // /api/metrics/summary (期間タブ切替後) と同じ両端含む窓に揃える
     supabase
       .from('cashbook_entries')
-      .select('amount, entry_type, sale_kind')
+      .select('amount, entry_type, sale_kind, category')
       .gte('entry_date', monthStart)
-      .lt('entry_date', monthEndExclusive),
+      .lte('entry_date', today),
     supabase
       .from('daily_reports')
       .select(
-        'existing_treatment_count, repeat_count, total_sales, hpb_new_count, hpb_contract_count,' +
+        'existing_treatment_count, repeat_count, total_sales, discount_total, hpb_new_count, hpb_contract_count,' +
           ' meta_new_count, meta_contract_count, minimo_new_count, minimo_contract_count,' +
           ' referral_new_count, referral_contract_count',
       )
       .gte('report_date', monthStart)
-      .lt('report_date', monthEndExclusive),
+      .lte('report_date', today),
+    // JST の月初 00:00 以降 (submitted_at は timestamptz)
     supabase
       .from('counseling_records')
       .select('id', { count: 'exact', head: true })
-      .gte('submitted_at', monthStart),
+      .gte('submitted_at', `${monthStart}T00:00:00+09:00`)
+      .lt('submitted_at', `${monthEndExclusive}T00:00:00+09:00`),
     supabase
       .from('visits')
       .select('id, member_id, visit_date, menu, amount, members(full_name, line_picture_url)')
@@ -117,11 +104,17 @@ export default async function DashboardHome() {
       .select('id, treatment_date, menu, amount, member:members(full_name, line_picture_url), is_first_visit, contracted, line_sent_at')
       .order('treatment_date', { ascending: false })
       .limit(5),
+    // 今月の施術件数 (正確なカウント)
+    supabase
+      .from('treatment_reports')
+      .select('id', { count: 'exact', head: true })
+      .gte('treatment_date', monthStart)
+      .lte('treatment_date', today),
     // 過去 30 日の日次売上
     supabase
       .from('cashbook_entries')
       .select('entry_date, amount, entry_type')
-      .gte('entry_date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+      .gte('entry_date', ymd(new Date(Date.now() - 30 * 86400000)))
       .lte('entry_date', today)
       .eq('entry_type', 'income'),
     // 期限切れ間近 (30日以内) の有効チケット
@@ -133,15 +126,6 @@ export default async function DashboardHome() {
       .gte('days_until_expiry', 0)
       .order('days_until_expiry', { ascending: true })
       .limit(8),
-    // 今日の予約
-    supabase
-      .from('reservation_overview')
-      .select('id, customer_name, member_full_name, member_picture, reservation_at, duration_minutes, menu, source, status, staff_name')
-      .gte('reservation_at', todayStart.toISOString())
-      .lte('reservation_at', todayEnd.toISOString())
-      .neq('status', 'cancelled')
-      .neq('status', 'no_show')
-      .order('reservation_at', { ascending: true }),
     // 今月の目標達成状況 (全店舗)
     getGoalProgress(supabase, { month: monthStart.slice(0, 7) }),
   ]);
@@ -151,13 +135,21 @@ export default async function DashboardHome() {
 
   const cashEntries = monthCashRes.data ?? [];
   const incomeEntries = cashEntries.filter((e: any) => e.entry_type === 'income');
+  const refundEntries = cashEntries.filter(
+    (e: any) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY,
+  );
   const monthIncome = incomeEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
-  const subscriptionIncome = incomeEntries
-    .filter((e: any) => e.sale_kind === 'subscription')
-    .reduce((sum: number, e: any) => sum + e.amount, 0);
-  const ticketIncome = incomeEntries
-    .filter((e: any) => e.sale_kind === 'ticket')
-    .reduce((sum: number, e: any) => sum + e.amount, 0);
+  const monthRefunds = refundEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
+  // 内訳は区分ごとの返金も控除した純額 (/api/metrics/summary と同じ定義)
+  const kindNet = (kind: string) =>
+    incomeEntries
+      .filter((e: any) => e.sale_kind === kind)
+      .reduce((sum: number, e: any) => sum + e.amount, 0) -
+    refundEntries
+      .filter((e: any) => e.sale_kind === kind)
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+  const subscriptionIncome = kindNet('subscription');
+  const ticketIncome = kindNet('ticket');
   const monthExpense = cashEntries
     .filter((e: any) => e.entry_type === 'expense')
     .reduce((sum: number, e: any) => sum + e.amount, 0);
@@ -182,9 +174,13 @@ export default async function DashboardHome() {
     activeMembers: activeMembersRes.count ?? 0,
     activeSubs: activeSubsRes.count ?? 0,
     income: monthIncome,
+    refunds: monthRefunds,
+    netIncome: monthIncome - monthRefunds,
+    // 値引後 (売上分析ページ・/api/metrics/summary と同じ定義)
+    reportedSales: sumCol('total_sales') - sumCol('discount_total'),
     subscriptionIncome,
     ticketIncome,
-    otherIncome: monthIncome - subscriptionIncome - ticketIncome,
+    otherIncome: monthIncome - monthRefunds - subscriptionIncome - ticketIncome,
     expense: monthExpense,
     newCount: totalNew,
     contractCount: totalContract,
@@ -194,19 +190,19 @@ export default async function DashboardHome() {
     repeatRate: totalExisting > 0 ? Math.round((totalRepeat / totalExisting) * 100) : 0,
   };
 
-  // 30 日トレンド
+  // 30 日トレンド (バケットキーは entry_date と同じ JST 暦日で揃える)
   const dailyMap = new Map<string, number>();
   (dailySalesRes.data ?? []).forEach((e: any) => {
     dailyMap.set(e.entry_date, (dailyMap.get(e.entry_date) ?? 0) + e.amount);
   });
   const trendData = [];
   for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const d = ymd(new Date(Date.now() - i * 86400000));
     trendData.push({ date: d, income: dailyMap.get(d) ?? 0 });
   }
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6 stagger-children">
       <PageHeader
         title={`おかえりなさい、${staff.display_name}さん`}
         description={`今月 (${monthStart.slice(0, 7)}) の概況です`}
@@ -216,57 +212,10 @@ export default async function DashboardHome() {
 
       <GoalProgressCard progress={goalProgress} />
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="text-vivie-500" size={18} />
-            今日の予約 ({(todayReservationsRes.data ?? []).length} 件)
-          </CardTitle>
-          <Link href="/reservations" className="text-xs text-ink-500 hover:text-vivie-600">
-            すべて見る →
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {(todayReservationsRes.data ?? []).length === 0 ? (
-            <p className="px-5 py-6 text-sm text-ink-400 text-center">
-              今日の予約はありません
-            </p>
-          ) : (
-            <ul className="divide-y divide-ink-100">
-              {(todayReservationsRes.data ?? []).map((r: any) => {
-                const start = new Date(r.reservation_at);
-                const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-                return (
-                  <li key={r.id} className="flex items-center gap-3 px-5 py-2.5">
-                    <span className="text-sm font-mono text-ink-700 w-12">{time}</span>
-                    <Avatar
-                      name={r.member_full_name ?? r.customer_name}
-                      src={r.member_picture}
-                      size="sm"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {r.member_full_name ?? r.customer_name}
-                      </p>
-                      <p className="text-xs text-ink-500 truncate">
-                        {r.menu ?? '—'}{r.staff_name && ` ・ ${r.staff_name}`}
-                      </p>
-                    </div>
-                    <span className="text-[10px] rounded-full bg-ink-100 text-ink-600 px-2 py-0.5">
-                      {r.source}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
       {(expiringTicketsRes.data ?? []).length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-900">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="text-amber-600" size={18} />
               30日以内に期限切れの回数券 ({(expiringTicketsRes.data ?? []).length}件)
             </CardTitle>

@@ -1,10 +1,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar } from '@/components/ui/avatar';
-import { EmptyState } from '@/components/ui/empty-state';
 import {
   type LucideIcon,
-  CalendarDays,
   Users,
   ClipboardList,
   Activity,
@@ -28,18 +25,11 @@ type QuickAction = {
 
 const quickActions: QuickAction[] = [
   {
-    href: '/reservations',
-    label: '予約',
-    description: '今日の予約・新規予約',
-    icon: CalendarDays,
-    tone: 'rose',
-  },
-  {
     href: '/members',
     label: '会員',
     description: '会員検索・新規登録',
     icon: Users,
-    tone: 'amber',
+    tone: 'rose',
   },
   {
     href: '/counseling/new',
@@ -81,31 +71,33 @@ const toneClass: Record<QuickAction['tone'], string> = {
 
 export function StoreHome({
   staff,
-  todayReservations,
   expiringTickets,
   goalProgress,
 }: {
   staff: Staff;
-  todayReservations: any[];
   expiringTickets: any[];
   goalProgress?: GoalProgress;
 }) {
   const now = new Date();
   const todayLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
-  const upcoming = todayReservations.filter(
-    (r) => new Date(r.reservation_at).getTime() >= Date.now() - 30 * 60 * 1000,
-  );
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-sm md:p-8">
-        <p className="text-xs font-medium text-ink-500">{todayLabel}</p>
+    <div className="space-y-6 stagger-children">
+      <div className="relative overflow-hidden rounded-3xl border border-ink-100 bg-white p-6 shadow-soft md:p-8">
+        <div
+          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gold-100/60 blur-2xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full bg-vivie-100/70 blur-2xl"
+          aria-hidden
+        />
+        <p className="text-xs font-medium tracking-wide text-ink-500">{todayLabel}</p>
         <h1 className="mt-1 font-serif text-2xl font-semibold text-ink-900 md:text-3xl">
           いらっしゃいませ {staff.display_name}
         </h1>
-        <p className="mt-1 text-sm text-ink-500">
-          今日の予約は {todayReservations.length} 件、残り {upcoming.length} 件です
-        </p>
+        <span className="gold-rule mt-3" aria-hidden />
+        <p className="mt-2 text-sm text-ink-500">今日も一日よろしくお願いします</p>
       </div>
 
       {goalProgress && <GoalProgressCard progress={goalProgress} />}
@@ -141,64 +133,10 @@ export function StoreHome({
         </div>
       </section>
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="text-vivie-500" size={18} />
-            今日の予約 ({todayReservations.length} 件)
-          </CardTitle>
-          <Link href="/reservations" className="text-xs text-ink-500 hover:text-vivie-600">
-            すべて見る →
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          {todayReservations.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays size={28} />}
-              title="今日の予約はありません"
-              description="新しい予約は予約ページから追加できます"
-            />
-          ) : (
-            <ul className="divide-y divide-ink-100">
-              {todayReservations.map((r: any) => {
-                const start = new Date(r.reservation_at);
-                const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-                const isPast = start.getTime() < Date.now() - 30 * 60 * 1000;
-                return (
-                  <li
-                    key={r.id}
-                    className={`flex items-center gap-3 px-5 py-3 ${isPast ? 'opacity-60' : ''}`}
-                  >
-                    <span className="text-base font-mono font-semibold text-ink-700 w-14">{time}</span>
-                    <Avatar
-                      name={r.member_full_name ?? r.customer_name}
-                      src={r.member_picture}
-                      size="sm"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {r.member_full_name ?? r.customer_name}
-                      </p>
-                      <p className="text-xs text-ink-500 truncate">
-                        {r.menu ?? '—'}
-                        {r.staff_name && ` ・ ${r.staff_name}`}
-                      </p>
-                    </div>
-                    <span className="text-[10px] rounded-full bg-ink-100 text-ink-600 px-2 py-0.5">
-                      {r.source}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
       {expiringTickets.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-900">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="text-amber-600" size={18} />
               30日以内に期限切れの回数券 ({expiringTickets.length} 件)
             </CardTitle>
