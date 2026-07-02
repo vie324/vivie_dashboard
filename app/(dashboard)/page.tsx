@@ -135,16 +135,21 @@ export default async function DashboardHome() {
 
   const cashEntries = monthCashRes.data ?? [];
   const incomeEntries = cashEntries.filter((e: any) => e.entry_type === 'income');
+  const refundEntries = cashEntries.filter(
+    (e: any) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY,
+  );
   const monthIncome = incomeEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
-  const subscriptionIncome = incomeEntries
-    .filter((e: any) => e.sale_kind === 'subscription')
-    .reduce((sum: number, e: any) => sum + e.amount, 0);
-  const ticketIncome = incomeEntries
-    .filter((e: any) => e.sale_kind === 'ticket')
-    .reduce((sum: number, e: any) => sum + e.amount, 0);
-  const monthRefunds = cashEntries
-    .filter((e: any) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY)
-    .reduce((sum: number, e: any) => sum + e.amount, 0);
+  const monthRefunds = refundEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
+  // 内訳は区分ごとの返金も控除した純額 (/api/metrics/summary と同じ定義)
+  const kindNet = (kind: string) =>
+    incomeEntries
+      .filter((e: any) => e.sale_kind === kind)
+      .reduce((sum: number, e: any) => sum + e.amount, 0) -
+    refundEntries
+      .filter((e: any) => e.sale_kind === kind)
+      .reduce((sum: number, e: any) => sum + e.amount, 0);
+  const subscriptionIncome = kindNet('subscription');
+  const ticketIncome = kindNet('ticket');
   const monthExpense = cashEntries
     .filter((e: any) => e.entry_type === 'expense')
     .reduce((sum: number, e: any) => sum + e.amount, 0);
@@ -175,7 +180,7 @@ export default async function DashboardHome() {
     reportedSales: sumCol('total_sales') - sumCol('discount_total'),
     subscriptionIncome,
     ticketIncome,
-    otherIncome: monthIncome - subscriptionIncome - ticketIncome,
+    otherIncome: monthIncome - monthRefunds - subscriptionIncome - ticketIncome,
     expense: monthExpense,
     newCount: totalNew,
     contractCount: totalContract,

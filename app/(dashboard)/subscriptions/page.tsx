@@ -69,24 +69,31 @@ export default async function SubscriptionsPage() {
   const subs = (subsRaw ?? []) as unknown as (SubscriptionRow & { created_at: string })[];
 
   // --- KPI 計算 ---
+  // started_at が null の契約 (Webhook 経由など) は created_at で開始日を代用する
+  const startRef = (s: (typeof subs)[number]) =>
+    s.started_at ?? (s.created_at ? s.created_at.slice(0, 10) : null);
+
   const activeSubs = subs.filter((s) => subStatusInfo(s.status).group === 'active');
-  const newThisMonth = subs.filter(
-    (s) => s.started_at && s.started_at >= monthStart && s.started_at < monthEndExclusive,
-  );
+  const newThisMonth = subs.filter((s) => {
+    const st = startRef(s);
+    return st && st >= monthStart && st < monthEndExclusive;
+  });
   const cancelledThisMonth = subs.filter(
     (s) => s.cancelled_at && s.cancelled_at >= monthStart && s.cancelled_at < monthEndExclusive,
   );
 
-  // 月初時点のアクティブ契約数 (解約率の分母)
+  // 月初時点のアクティブ契約数
   const activeAtMonthStart = subs.filter((s) => {
-    if (!s.started_at || s.started_at >= monthStart) return false;
+    const st = startRef(s);
+    if (!st || st >= monthStart) return false;
     return !s.cancelled_at || s.cancelled_at >= monthStart;
   }).length;
+  // 解約率の分母は「今月アクティブだった契約」(月初アクティブ + 今月新規)。
+  // 月初のみを分母にすると当月中の契約→解約で 100% 超になり得る。
+  const churnBase = activeAtMonthStart + newThisMonth.length;
   const churnRate =
-    activeAtMonthStart > 0
-      ? Math.round((cancelledThisMonth.length / activeAtMonthStart) * 1000) / 10
-      : 0;
-  const retentionRate = activeAtMonthStart > 0 ? Math.round((100 - churnRate) * 10) / 10 : 100;
+    churnBase > 0 ? Math.round((cancelledThisMonth.length / churnBase) * 1000) / 10 : 0;
+  const retentionRate = churnBase > 0 ? Math.round((100 - churnRate) * 10) / 10 : 100;
 
   // MRR: プラン価格を課金周期で月額換算して合算
   const totalMRR = activeSubs.reduce((sum, s) => {
@@ -160,7 +167,7 @@ export default async function SubscriptionsPage() {
         <KpiCard
           label="今月の解約"
           value={`${cancelledThisMonth.length} 件`}
-          hint={`解約率 ${churnRate}% (月初 ${activeAtMonthStart} 件中)`}
+          hint={`解約率 ${churnRate}% (今月対象 ${churnBase} 件中)`}
           icon={<UserMinus size={18} />}
           tone={cancelledThisMonth.length > 0 ? 'amber' : 'default'}
         />

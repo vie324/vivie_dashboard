@@ -40,25 +40,27 @@ export default async function SalesPage({
 
   const supabase = createClient();
   const month =
-    searchParams?.month && /^\d{4}-\d{2}$/.test(searchParams.month)
+    searchParams?.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(searchParams.month)
       ? searchParams.month
       : thisMonthJST();
   const { start, endExclusive, endInclusive } = monthRange(month);
   const today = todayISO();
   const isCurrentMonth = month === thisMonthJST();
+  // 今月表示では未来日付の記帳 (前受けなど) を除外し、チャート・ダッシュボードと揃える
+  const lastDay = isCurrentMonth ? today : endInclusive;
 
   const [{ data: cash }, { data: reports }, { data: goalRows }] = await Promise.all([
     supabase
       .from('cashbook_entries')
       .select('entry_date, amount, entry_type, sale_kind, category, source, description')
       .gte('entry_date', start)
-      .lt('entry_date', endExclusive)
+      .lte('entry_date', lastDay)
       .order('entry_date'),
     supabase
       .from('daily_reports')
       .select('report_date, total_sales, discount_total')
       .gte('report_date', start)
-      .lt('report_date', endExclusive),
+      .lte('report_date', lastDay),
     supabase.from('monthly_goals').select('*').eq('goal_month', month),
   ]);
 
@@ -107,7 +109,6 @@ export default async function SalesPage({
     );
   }
 
-  const lastDay = isCurrentMonth ? today : endInclusive;
   const chartData: ReconciliationPoint[] = [];
   for (let d = start; d <= lastDay; d = nextDay(d)) {
     chartData.push({
@@ -117,9 +118,9 @@ export default async function SalesPage({
     });
   }
 
-  // 差異のある日 (どちらかが 0 でない かつ 一致しない)
+  // 差異のある日 (どちらかが 0 でない かつ 一致しない)。返金のみの日 (settled < 0) も含める
   const mismatchDays = chartData
-    .filter((p) => p.settled !== p.reported && (p.settled > 0 || p.reported > 0))
+    .filter((p) => p.settled !== p.reported && (p.settled !== 0 || p.reported !== 0))
     .map((p) => ({ ...p, diff: p.settled - p.reported }))
     .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 

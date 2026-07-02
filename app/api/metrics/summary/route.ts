@@ -82,16 +82,17 @@ export async function GET(request: NextRequest) {
     category: string | null;
   }[];
   const income = cash.filter((e) => e.entry_type === 'income');
+  const refundRows = cash.filter(
+    (e) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY,
+  );
   const totalIncome = income.reduce((s, e) => s + e.amount, 0);
-  const subscriptionIncome = income
-    .filter((e) => e.sale_kind === 'subscription')
-    .reduce((s, e) => s + e.amount, 0);
-  const ticketIncome = income
-    .filter((e) => e.sale_kind === 'ticket')
-    .reduce((s, e) => s + e.amount, 0);
-  const refunds = cash
-    .filter((e) => e.entry_type === 'expense' && e.category === REFUND_CATEGORY)
-    .reduce((s, e) => s + e.amount, 0);
+  const refunds = refundRows.reduce((s, e) => s + e.amount, 0);
+  // 内訳は区分ごとの返金も控除した純額で返す (内訳の合計 = netIncome になる)
+  const kindNet = (kind: string) =>
+    income.filter((e) => e.sale_kind === kind).reduce((s, e) => s + e.amount, 0) -
+    refundRows.filter((e) => e.sale_kind === kind).reduce((s, e) => s + e.amount, 0);
+  const subscriptionIncome = kindNet('subscription');
+  const ticketIncome = kindNet('ticket');
   const expense = cash
     .filter((e) => e.entry_type === 'expense')
     .reduce((s, e) => s + e.amount, 0);
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
     reportedSales,
     subscriptionIncome,
     ticketIncome,
-    otherIncome: totalIncome - subscriptionIncome - ticketIncome,
+    otherIncome: totalIncome - refunds - subscriptionIncome - ticketIncome,
     expense,
     newCount,
     contractCount,
