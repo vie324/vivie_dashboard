@@ -217,7 +217,7 @@ export function Sidebar({
         <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
           {visibleGroups.map((group) => (
             <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600/80">
+              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600/80 dark:text-gold-300/90">
                 {group.label}
               </p>
               <ul className="space-y-0.5">
@@ -233,7 +233,7 @@ export function Sidebar({
                         className={cn(
                           'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all duration-200',
                           active
-                            ? 'bg-gradient-to-r from-vivie-50 to-transparent text-vivie-700 font-medium'
+                            ? 'bg-gradient-to-r from-vivie-50 to-transparent text-vivie-700 font-medium dark:from-vivie-500/15 dark:text-vivie-200'
                             : 'text-ink-700 hover:bg-ink-50 hover:translate-x-0.5',
                         )}
                       >

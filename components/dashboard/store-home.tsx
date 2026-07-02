@@ -136,7 +136,7 @@ export function StoreHome({
       {expiringTickets.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-900">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="text-amber-600" size={18} />
               30日以内に期限切れの回数券 ({expiringTickets.length} 件)
             </CardTitle>

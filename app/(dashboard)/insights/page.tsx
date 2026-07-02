@@ -212,7 +212,7 @@ export default async function InsightsPage() {
       {ghostSubscribers.length > 0 && (
         <Card className="border-orange-200">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-900">
+            <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
               <Ghost className="text-orange-600" size={18} />
               サブスク継続中なのに来店が途絶えているお客様 ({ghostSubscribers.length}名)
             </CardTitle>

@@ -46,8 +46,9 @@ html.dark .bg-ink-50\/60 { background-color: rgba(47, 40, 35, 0.6) !important; }
 html.dark .bg-white\/80 { background-color: rgba(42, 37, 33, 0.85) !important; }
 html.dark .bg-white\/90 { background-color: rgba(42, 37, 33, 0.92) !important; }
 html.dark .bg-white\/95 { background-color: rgba(42, 37, 33, 0.95) !important; }
-html.dark .bg-gold-50 { background-color: rgba(176, 141, 87, 0.12) !important; }
-html.dark .bg-gold-100 { background-color: rgba(176, 141, 87, 0.18) !important; }
+/* 装飾ブロブ (店舗ホームのヒーロー) はダークでは淡い光にする */
+html.dark .bg-gold-100\/60 { background-color: rgba(176, 141, 87, 0.15) !important; }
+html.dark .bg-vivie-100\/70 { background-color: rgba(201, 135, 133, 0.12) !important; }
 
 * {
   border-color: rgb(var(--border));
@@ -175,9 +176,11 @@ body {
 }
 
 @layer utilities {
-  /* 子要素を順番にふわっと表示する (ダッシュボードのセクション用) */
+  /* 子要素を順番にふわっと表示する (ダッシュボードのセクション用)。
+     fill-mode は backwards にする: both だと transform が残留して子孫の
+     position: fixed 要素 (モーダル等) の包含ブロックになってしまう */
   .stagger-children > * {
-    animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
   .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
   .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
@@ -191,7 +194,8 @@ body {
   @media (prefers-reduced-motion: reduce) {
     .stagger-children > *,
     .animate-fade-in-up,
-    .animate-scale-in {
+    .animate-scale-in,
+    .animate-bar-grow {
       animation: none !important;
     }
   }
