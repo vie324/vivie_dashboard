@@ -243,15 +243,22 @@ async function runSync(lookbackDays: number): Promise<
 
           if (subs.length > 0) {
             const customerIds = Array.from(new Set(subs.map((s) => s.customerId!)));
-            const { data: memberRows } = await supabase
+            const { data: memberRows, error: memberSelErr } = await supabase
               .from('members')
               .select('id, square_customer_id')
               .in('square_customer_id', customerIds);
+            // select 失敗を空マップ扱いすると「会員未同期」という誤った警告で
+            // ページ全体が黙ってスキップされるため、明示的にエラーへ
+            if (memberSelErr) throw new Error(memberSelErr.message);
             const memberIdByCustomer = new Map<string, string>(
               (memberRows ?? []).map((m: any) => [m.square_customer_id, m.id]),
             );
 
-            const rows = [] as any[];
+            // プラン未解決時は plan_id を送らない (null で上書きすると Webhook や
+            // 過去の同期で付いた紐付けをクロバーする)。PostgREST の一括 upsert は
+            // 全行同一キーが必要なため、plan_id の有無で 2 グループに分ける。
+            const withPlan = [] as any[];
+            const withoutPlan = [] as any[];
             let unknownMembers = 0;
             for (const s of subs) {
               const memberId = memberIdByCustomer.get(s.customerId!);
@@ -259,24 +266,27 @@ async function runSync(lookbackDays: number): Promise<
                 unknownMembers++;
                 continue;
               }
-              rows.push({
+              const base = {
                 square_subscription_id: s.id!,
                 member_id: memberId,
-                plan_id: s.planVariationId
-                  ? planIdBySquareId.get(s.planVariationId) ?? null
-                  : null,
                 status: s.status ?? 'UNKNOWN',
                 started_at: s.startDate ?? null,
                 next_billing_at: s.chargedThroughDate ?? null,
                 cancelled_at: s.canceledDate ?? null,
-              });
+              };
+              const planRowId = s.planVariationId
+                ? planIdBySquareId.get(s.planVariationId) ?? null
+                : null;
+              if (planRowId) withPlan.push({ ...base, plan_id: planRowId });
+              else withoutPlan.push(base);
             }
             if (unknownMembers > 0) {
               result.warnings.push(
                 `[subscriptions/${locationId}] 会員未同期のため ${unknownMembers} 件スキップ`,
               );
             }
-            if (rows.length > 0) {
+            for (const rows of [withPlan, withoutPlan]) {
+              if (rows.length === 0) continue;
               const { error } = await supabase
                 .from('member_subscriptions')
                 .upsert(rows, { onConflict: 'square_subscription_id' });
@@ -343,7 +353,9 @@ async function runSync(lookbackDays: number): Promise<
                 result.warnings.push(
                   `[payments/${locationId}] stores.square_location_id が未設定のため記帳できません (${r.skipped})`,
                 );
-                break; // この location は全件同じ理由で落ちるため打ち切る
+                // この location は全件同じ理由で落ちるためカーソルループごと打ち切る
+                cursor = undefined;
+                break;
               }
             }
           }

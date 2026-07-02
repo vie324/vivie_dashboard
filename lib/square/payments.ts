@@ -32,17 +32,20 @@ export type RecordResult =
   | { ok: true; skipped?: string }
   | { ok: false; error: string };
 
+// DB エラーは「該当なし」と区別して呼び出し元へ返す。エラーを null 扱いすると
+// 一時的な障害が「店舗未設定」として 200 ACK され、Square が再送しなくなる。
 async function storeIdForLocation(
   supabase: SupabaseClient<any>,
   locationId: string | null,
-): Promise<string | null> {
-  if (!locationId) return null;
-  const { data } = await supabase
+): Promise<{ id: string | null; error: string | null }> {
+  if (!locationId) return { id: null, error: null };
+  const { data, error } = await supabase
     .from('stores')
     .select('id')
     .eq('square_location_id', locationId)
     .maybeSingle();
-  return (data as any)?.id ?? null;
+  if (error) return { id: null, error: error.message };
+  return { id: (data as any)?.id ?? null, error: null };
 }
 
 // 完了済み決済を出納帳へ記帳する。既に同じ square_payment_id の行があれば何もしない
@@ -54,10 +57,12 @@ export async function recordPayment(
   if (p.status !== 'COMPLETED' || !(p.amount > 0)) {
     return { ok: true, skipped: 'not_completed' };
   }
-  const storeId = await storeIdForLocation(supabase, p.locationId);
-  if (!storeId) {
+  const store = await storeIdForLocation(supabase, p.locationId);
+  if (store.error) return { ok: false, error: `[payment/${p.id}] ${store.error}` };
+  if (!store.id) {
     return { ok: true, skipped: `store_unmapped:${p.locationId ?? 'unknown'}` };
   }
+  const storeId = store.id;
 
   // サブスク課金かどうかを判定する。Square の payment は subscription_id を直接
   // 持たないため、顧客の有効サブスクの月額と金額一致するかで推定する。
@@ -66,19 +71,23 @@ export async function recordPayment(
   let relatedMemberId: string | null = null;
 
   if (p.customerId) {
-    const { data: member } = await supabase
+    const { data: member, error: memberErr } = await supabase
       .from('members')
       .select('id')
       .eq('square_customer_id', p.customerId)
       .maybeSingle();
+    // 判定用ルックアップの失敗を無視すると sale_kind が誤分類のまま固定される
+    // (ignoreDuplicates で後から直らない) ため、エラーとして返して再送させる
+    if (memberErr) return { ok: false, error: `[payment/${p.id}] ${memberErr.message}` };
     relatedMemberId = (member as any)?.id ?? null;
 
     if (relatedMemberId) {
-      const { data: subs } = await supabase
+      const { data: subs, error: subsErr } = await supabase
         .from('member_subscriptions')
         .select('square_subscription_id, status, plan:subscription_plans(monthly_price)')
         .eq('member_id', relatedMemberId)
         .in('status', ['ACTIVE', 'active']);
+      if (subsErr) return { ok: false, error: `[payment/${p.id}] ${subsErr.message}` };
       const match = (subs ?? []).find(
         (s: any) => Number(s.plan?.monthly_price ?? -1) === p.amount,
       );
@@ -122,15 +131,21 @@ export async function recordRefund(
   // 元決済の行 (store / 会員 / 売上区分を引き継ぐ)
   let original: any = null;
   if (r.paymentId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('cashbook_entries')
       .select('store_id, sale_kind, related_member_id')
       .eq('square_payment_id', r.paymentId)
       .maybeSingle();
+    if (error) return { ok: false, error: `[refund/${r.id}] ${error.message}` };
     original = data;
   }
 
-  const storeId = original?.store_id ?? (await storeIdForLocation(supabase, r.locationId));
+  let storeId: string | null = original?.store_id ?? null;
+  if (!storeId) {
+    const store = await storeIdForLocation(supabase, r.locationId);
+    if (store.error) return { ok: false, error: `[refund/${r.id}] ${store.error}` };
+    storeId = store.id;
+  }
   if (!storeId) {
     return { ok: true, skipped: `store_unmapped:${r.locationId ?? 'unknown'}` };
   }
