@@ -186,8 +186,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (failures.length > 0) {
+    // 詳細はサーバーログのみに残す (レスポンスは Square のダッシュボードに表示されるため
+    // DB エラー文字列や内部 ID を含めない)。5xx を返せば Square が再送する。
     console.error('webhook failures', failures);
-    return NextResponse.json({ error: failures.join('; ') }, { status: 500 });
+    return NextResponse.json({ error: 'processing failed' }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

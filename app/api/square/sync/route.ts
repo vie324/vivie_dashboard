@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import {
   squareClient,
   squareLocationIds,
@@ -433,20 +434,24 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(safeJson({ ok: true, ...outcome.result }));
 }
 
-// Vercel Cron からの定期同期 (毎日)。CRON_SECRET があれば Bearer で検証、
-// 無ければ管理者ログインを要求する。
+// Vercel Cron からの定期同期 (毎日)。CRON_SECRET の Bearer 検証必須。
+// GET は状態変更を伴うためセッション Cookie では認証しない
+// (SameSite=Lax の Cookie はクロスサイトの GET 遷移でも送られ、CSRF になり得る)。
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = request.headers.get('authorization');
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    }
-  } else {
-    const staff = await getCurrentStaff();
-    if (!staff || (staff.role !== 'admin' && staff.role !== 'manager')) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    }
+  if (!secret) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET が未設定です。Vercel の環境変数に設定してください。' },
+      { status: 503 },
+    );
+  }
+  const auth = request.headers.get('authorization') ?? '';
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const provided = Buffer.from(auth);
+  const ok =
+    expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
+  if (!ok) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   const outcome = await runSync(parseLookbackDays(request, 35));
