@@ -10,8 +10,10 @@ const PUBLIC_PATHS = [
   '/staff/',
   '/api/staff/',
   '/api/square/webhook',
+  // Vercel Cron からの GET はセッション Cookie を持たないため素通しし、
+  // ルート側で CRON_SECRET / 管理者ログインを検証する
+  '/api/square/sync',
   '/api/line/webhook',
-  '/api/inbound/gmail',
   '/_next',
   '/favicon.ico',
 ];
