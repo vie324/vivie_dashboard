@@ -7,13 +7,17 @@
 
 | 機能 | 内容 |
 | --- | --- |
+| 売上分析 | 決済ベースの実売上とスタッフ日報を日単位で照合。返金・着地予測・目標比 |
+| サブスク | Square Subscription を自動同期。解約・継続率・MRR (月額換算)・実績売上 |
+| 顧客インサイト | RFM セグメント、LTV ランキング、離脱リスク・サブスク幽霊会員の抽出 |
 | 会員管理 | Square 連携 + 手動登録の統合管理 |
-| サブスク | Square Subscription を自動同期、MRR 表示 |
 | カウンセリング | 公開 URL からお客様が直接入力 (Google Form 置き換え) |
-| 出納帳 | 月次の収支管理。Square 決済は Webhook で自動記帳 |
-| 日報 | スタッフ専用 URL からの入力。リピート率を自動算出 |
+| 出納帳 | 月次の収支管理。Square 決済・返金は Webhook + 日次同期で自動記帳 |
+| 日報 | スタッフ専用 URL からの入力。リピート率・契約率を自動算出 |
 | 勤怠 | 店舗から半径 300m 以内のみ打刻可能な GPS 認証 |
 | 設定 | 店舗座標、スタッフロール、専用 URL の管理 |
+
+> 予約管理は外部サービスで運用するため、このダッシュボードには含まれません。
 
 ## 技術スタック
 
@@ -30,8 +34,10 @@
 app/
 ├── (dashboard)/        # 認証必須エリア (サイドバー付きレイアウト)
 │   ├── page.tsx        # ダッシュボード
+│   ├── sales/          # 売上分析 (決済 × 日報の照合)
+│   ├── subscriptions/  # サブスク (解約・継続・MRR)
+│   ├── insights/       # 顧客インサイト (RFM / LTV / 離脱リスク)
 │   ├── members/        # 会員管理
-│   ├── subscriptions/  # サブスク
 │   ├── counseling/     # カウンセリング
 │   ├── cashbook/       # 出納帳
 │   ├── reports/        # 日報
@@ -107,8 +113,10 @@ supabase db push
 2. Production の Access Token を取得 → `SQUARE_ACCESS_TOKEN`
 3. Locations API で取得した location_id を `SQUARE_LOCATION_IDS` (カンマ区切り) に設定
 4. Webhook を `https://<your-domain>/api/square/webhook` で登録
-   - イベント: `customer.*`, `subscription.*`, `payment.*`
-   - Signature key を `SQUARE_WEBHOOK_SIGNATURE_KEY` に設定
+   - イベント: `customer.*`, `subscription.*`, `payment.*`, `refund.*`
+   - Signature key を `SQUARE_WEBHOOK_SIGNATURE_KEY` に設定 (未設定の場合 Webhook は受け付けません)
+5. Webhook の取りこぼしは毎日の Vercel Cron (`/api/square/sync`) が自動バックフィルします
+   - Cron 認証用に `CRON_SECRET` を設定してください (Vercel が自動で Bearer ヘッダに載せます)
 
 ### 3b. LINE Messaging API (公式 LINE 連携)
 
@@ -127,80 +135,7 @@ supabase db push
 - 会員詳細ページの「公式 LINE 連携」セクションから手動で会員と紐付け
 - 施術レポートで `初回来店 + 未契約` のお客様には「LINE で送信」ボタンが表示
 
-### 3c. Gmail プッシュ通知 (予約自動取り込み)
-
-HPB / minimo の予約通知メールを Gmail Pub/Sub プッシュで自動取り込みします。
-平均 5–30 秒の遅延で `reservations` テーブルに自動登録されます。
-
-#### 全体構成
-
-```
-HPB/minimo
-  ↓ 予約通知メール (~ 1 分)
-Vivie 専用 Gmail (例: bookings@vivie.salon)
-  ↓ Gmail watch (push)
-Google Cloud Pub/Sub
-  ↓ HTTPS Push (~ 5 秒)
-Vercel /api/inbound/gmail
-  ↓ メール本文パース
-Supabase reservations テーブル
-```
-
-#### 手順
-
-1. **Vivie 専用 Gmail アカウント作成**
-   - 任意のアドレス (例: `bookings@vivie.salon`)
-   - 2 段階認証は ON 推奨
-
-2. **Google Cloud Console** (<https://console.cloud.google.com/>) で:
-   - 新規プロジェクト作成 (例: `vivie-dashboard`)
-   - **APIs & Services** > **Library** > **Gmail API** を有効化
-   - **APIs & Services** > **Library** > **Cloud Pub/Sub API** を有効化
-
-3. **Pub/Sub トピック + サブスクリプション作成**
-   - **Pub/Sub** > **Topics** > **Create topic**: `gmail-vivie`
-   - 作成したトピックの **Permissions** タブで以下を Publisher として追加:
-     - `gmail-api-push@system.gserviceaccount.com`
-   - **Subscriptions** > **Create subscription**:
-     - Name: `gmail-vivie-sub`
-     - Delivery type: **Push**
-     - Endpoint URL: `https://<your-domain>/api/inbound/gmail?token=<GMAIL_PUBSUB_VERIFICATION_TOKEN>`
-     - Acknowledgement deadline: 60 秒程度
-
-4. **OAuth 2.0 クライアント作成**
-   - **APIs & Services** > **Credentials** > **Create Credentials** > **OAuth client ID**
-   - Type: **Web application**
-   - Authorized redirect URIs: `https://<your-domain>/api/gmail/oauth/callback`
-   - Client ID / Client Secret を取得
-
-5. **OAuth 同意画面の設定**
-   - Scopes に `gmail.readonly` `gmail.metadata` を追加
-   - Test users に Vivie 専用 Gmail のアドレスを追加 (本番公開しない場合)
-
-6. **Vercel 環境変数を設定**:
-   - `GOOGLE_OAUTH_CLIENT_ID` = (手順 4 で取得)
-   - `GOOGLE_OAUTH_CLIENT_SECRET` = (手順 4 で取得)
-   - `GMAIL_PUBSUB_TOPIC` = `projects/<PROJECT_ID>/topics/gmail-vivie`
-   - `GMAIL_PUBSUB_VERIFICATION_TOKEN` = ランダム文字列 (任意設定だが推奨)
-
-7. **Vercel 再デプロイ後**:
-   - ダッシュボード > **設定** > **Gmail 連携 > 詳細設定**
-   - 「**Gmail と連携**」ボタン → Vivie 専用 Gmail で同意 → 自動コールバック
-   - 「**Watch 開始 / 更新**」ボタンをクリック
-
-8. **HPB / minimo 側の設定**:
-   - HPB: サロンボード > 設定 > 通知メール送信先を Vivie 専用 Gmail に変更
-   - minimo: ストア管理 > 通知設定 > メール通知先を変更
-
-9. **動作確認**:
-   - HPB / minimo で予約が入ったら 5–30 秒で `/reservations` に出るはず
-   - **設定 > Gmail 連携** で受信ログとパース結果を確認
-   - パースが上手くいかない場合は「テストパーサ」セクションでメール本文を貼り付けて結果確認 → 必要なら正規表現を調整
-
-#### 制約
-
-- Gmail watch は最大 7 日で失効。Vercel Cron で 6 日に 1 回自動更新する設定が `vercel.json` に入っています
-- HPB / minimo の通知メールテンプレが変わった場合は `lib/gmail/parsers.ts` の正規表現を調整
+> 予約管理は外部サービスで運用するため、このダッシュボードに予約管理機能はありません。
 
 ### 4. 環境変数
 

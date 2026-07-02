@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { Menu, LogOut } from 'lucide-react';
 import type { Staff } from '@/types/database';
 
@@ -23,8 +24,18 @@ export function TopBar({
   staff: Staff;
   onMenuClick: () => void;
 }) {
+  // サーバー (UTC) とクライアント (JST) で日付が食い違うとハイドレーションエラーに
+  // なるため、日付表示はマウント後にクライアント側でだけ描画する
+  const [dateLabel, setDateLabel] = useState('');
+  useEffect(() => {
+    const now = new Date();
+    setDateLabel(
+      `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 (${'日月火水木金土'[now.getDay()]})`,
+    );
+  }, []);
+
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-ink-100 bg-white/80 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-ink-100/80 bg-white/80 px-4 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
@@ -33,6 +44,7 @@ export function TopBar({
         >
           <Menu size={18} />
         </button>
+        <p className="hidden text-xs tracking-wide text-ink-400 md:block">{dateLabel}</p>
       </div>
 
       <div className="flex items-center gap-3">

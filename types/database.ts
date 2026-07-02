@@ -28,28 +28,6 @@ export type CashbookSource = 'cash' | 'square' | 'bank' | 'online' | 'other';
 // 売上区分 (収入の内訳)。サブスク課金 / 単発 / 回数券 / 物販 / その他。
 export type SaleKind = 'subscription' | 'single' | 'ticket' | 'product' | 'other';
 export type AttendanceKind = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
-export type ReservationSource =
-  | 'hpb'
-  | 'minimo'
-  | 'phone'
-  | 'direct'
-  | 'line'
-  | 'instagram'
-  | 'threads'
-  | 'other';
-export type ReservationStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'completed'
-  | 'cancelled'
-  | 'no_show';
-export type InboundEmailStatus =
-  | 'received'
-  | 'parsed'
-  | 'matched'
-  | 'unmatched'
-  | 'duplicate'
-  | 'error';
 
 // =====================================================
 // Table Row 型
@@ -114,6 +92,8 @@ export type SubscriptionPlan = {
   square_plan_id: string | null;
   name: string;
   monthly_price: number;
+  // Square の課金周期 (MONTHLY / WEEKLY / ANNUAL など)。MRR の月額換算に使用。
+  cadence: string | null;
   monthly_visit_limit: number | null;
   carryover_months: number;
   is_active: boolean;
@@ -446,62 +426,6 @@ export type TicketUsage = {
   created_at: string;
 };
 
-export type Reservation = {
-  id: string;
-  member_id: string | null;
-  customer_name: string;
-  customer_furigana: string | null;
-  customer_phone: string | null;
-  customer_email: string | null;
-  source: ReservationSource;
-  source_label: string | null;
-  external_id: string | null;
-  reservation_at: string;
-  duration_minutes: number;
-  menu: string | null;
-  amount: number | null;
-  staff_id: string | null;
-  store_id: string;
-  status: ReservationStatus;
-  notes: string | null;
-  source_data: JsonObject | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type GmailIntegrationSettings = {
-  id: string;
-  email_address: string | null;
-  refresh_token: string | null;
-  history_id: string | null;
-  watch_expiration: string | null;
-  label_ids: string[] | null;
-  is_active: boolean;
-  last_received_at: string | null;
-  last_error: string | null;
-  connected_by: string | null;
-  connected_at: string | null;
-  updated_at: string;
-};
-
-export type InboundEmail = {
-  id: string;
-  message_id: string | null;
-  thread_id: string | null;
-  sender: string | null;
-  subject: string | null;
-  received_at: string;
-  body_snippet: string | null;
-  body_text: string | null;
-  parser_used: string | null;
-  parsed_data: JsonObject | null;
-  status: InboundEmailStatus;
-  reservation_id: string | null;
-  error_message: string | null;
-  created_at: string;
-};
-
 export type CounselingSettings = {
   id: string;
   disclaimer: string | null;
@@ -573,15 +497,6 @@ export type TicketOverview = Ticket & {
   effective_status: string;
 };
 
-export type ReservationOverview = Reservation & {
-  end_at: string | null;
-  member_full_name: string | null;
-  member_picture: string | null;
-  member_phone: string | null;
-  staff_name: string | null;
-  store_name: string | null;
-};
-
 // 派生リピート率 (媒体別) — 会員の獲得媒体 × 来店履歴ベースの参考値
 export type RepeatRateByMediaDerived = {
   channel: string;
@@ -635,9 +550,6 @@ export interface Database {
       ticket_plans: TableDef<TicketPlan>;
       tickets: TableDef<Ticket>;
       ticket_usages: TableDef<TicketUsage>;
-      reservations: TableDef<Reservation>;
-      gmail_integration_settings: TableDef<GmailIntegrationSettings>;
-      inbound_emails: TableDef<InboundEmail>;
       counseling_settings: TableDef<CounselingSettings>;
     };
     Views: {
@@ -647,7 +559,6 @@ export interface Database {
       counseling_marketing_summary: ViewDef<CounselingMarketingSummary>;
       counseling_staff_summary: ViewDef<CounselingStaffSummary>;
       ticket_overview: ViewDef<TicketOverview>;
-      reservation_overview: ViewDef<ReservationOverview>;
       repeat_rate_by_media_derived: ViewDef<RepeatRateByMediaDerived>;
     };
     Functions: {
@@ -669,9 +580,6 @@ export interface Database {
       cashbook_type: CashbookType;
       cashbook_source: CashbookSource;
       attendance_kind: AttendanceKind;
-      reservation_source: ReservationSource;
-      reservation_status: ReservationStatus;
-      inbound_email_status: InboundEmailStatus;
     };
     CompositeTypes: Record<string, never>;
   };

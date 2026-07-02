@@ -25,7 +25,10 @@ html.dark {
 }
 
 html.dark body {
-  background: rgb(var(--background));
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(201, 135, 133, 0.10), transparent 60%),
+    radial-gradient(900px 420px at -10% 100%, rgba(176, 141, 87, 0.08), transparent 60%),
+    rgb(var(--background));
   color: rgb(var(--foreground));
 }
 
@@ -40,6 +43,11 @@ html.dark .bg-ink-50 { background-color: #2F2823 !important; }
 html.dark .bg-ink-50\/40 { background-color: rgba(47, 40, 35, 0.4) !important; }
 html.dark .bg-ink-50\/50 { background-color: rgba(47, 40, 35, 0.5) !important; }
 html.dark .bg-ink-50\/60 { background-color: rgba(47, 40, 35, 0.6) !important; }
+html.dark .bg-white\/80 { background-color: rgba(42, 37, 33, 0.85) !important; }
+html.dark .bg-white\/90 { background-color: rgba(42, 37, 33, 0.92) !important; }
+html.dark .bg-white\/95 { background-color: rgba(42, 37, 33, 0.95) !important; }
+html.dark .bg-gold-50 { background-color: rgba(176, 141, 87, 0.12) !important; }
+html.dark .bg-gold-100 { background-color: rgba(176, 141, 87, 0.18) !important; }
 
 * {
   border-color: rgb(var(--border));
@@ -47,9 +55,17 @@ html.dark .bg-ink-50\/60 { background-color: rgba(47, 40, 35, 0.6) !important; }
 
 html,
 body {
-  background: rgb(var(--background));
   color: rgb(var(--foreground));
   font-feature-settings: 'palt';
+}
+
+/* 上質な紙のような、ごく淡いグラデーション背景 */
+body {
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(220, 169, 168, 0.14), transparent 60%),
+    radial-gradient(900px 420px at -10% 100%, rgba(201, 169, 106, 0.10), transparent 60%),
+    rgb(var(--background));
+  background-attachment: fixed;
 }
 
 @layer base {
@@ -66,14 +82,41 @@ body {
   textarea {
     font-family: inherit;
   }
+  ::selection {
+    @apply bg-vivie-200 text-ink-900;
+  }
+}
+
+/* 繊細なスクロールバー */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(146, 138, 126, 0.35);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(146, 138, 126, 0.55);
 }
 
 @layer components {
   .surface {
-    @apply rounded-2xl border border-ink-100 bg-white shadow-sm;
+    @apply rounded-2xl border border-ink-100 bg-white shadow-soft;
   }
   .surface-muted {
     @apply rounded-2xl border border-ink-100 bg-ink-50;
+  }
+  /* カードのホバー時の浮き上がり */
+  .card-hover {
+    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:border-vivie-200;
+  }
+  /* ゴールドの飾り罫 (見出し下のアクセント) */
+  .gold-rule {
+    @apply block h-px w-10 bg-gradient-to-r from-gold-400 via-gold-300 to-transparent;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
@@ -81,10 +124,11 @@ body {
            focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-vivie-400 text-white hover:bg-vivie-500 active:scale-[.98];
+    @apply btn bg-gradient-to-b from-vivie-400 to-vivie-500 text-white shadow-sm shadow-vivie-300/50
+           hover:from-vivie-500 hover:to-vivie-600 hover:shadow-lift active:scale-[.98];
   }
   .btn-secondary {
-    @apply btn bg-white border border-ink-200 text-ink-700 hover:bg-ink-50;
+    @apply btn bg-white border border-ink-200 text-ink-700 hover:bg-vivie-50 hover:border-vivie-200;
   }
   .btn-ghost {
     @apply btn hover:bg-ink-100 text-ink-700;
@@ -98,7 +142,7 @@ body {
   .field-input {
     @apply w-full rounded-xl border border-ink-200 bg-white px-3 py-2 text-sm
            focus:outline-none focus:ring-2 focus:ring-vivie-300 focus:border-vivie-300
-           placeholder:text-ink-300;
+           placeholder:text-ink-300 transition-shadow;
   }
   .field-textarea {
     @apply field-input min-h-[5rem] resize-y;
@@ -119,7 +163,36 @@ body {
   .table-base tbody td {
     @apply px-3 py-3 border-b border-ink-100 text-ink-900;
   }
+  .table-base tbody tr {
+    @apply transition-colors;
+  }
   .table-base tbody tr:hover {
     @apply bg-vivie-50/40;
+  }
+  .table-base tbody tr:last-child td {
+    @apply border-b-0;
+  }
+}
+
+@layer utilities {
+  /* 子要素を順番にふわっと表示する (ダッシュボードのセクション用) */
+  .stagger-children > * {
+    animation: fade-in-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stagger-children > *,
+    .animate-fade-in-up,
+    .animate-scale-in {
+      animation: none !important;
+    }
   }
 }

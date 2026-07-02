@@ -135,12 +135,16 @@ export function DailyReportForm({
         }
       } else {
         const supabase = createClient();
+        // 編集時は id を含めて既存行を更新する。id 無しの upsert だと店舗や日付を
+        // 変更した瞬間に「新しい行の追加」になり、元の日報が残って二重計上される。
         const { error } = await supabase.from('daily_reports').upsert(
           {
+            ...(isEditing ? { id: initial.id } : {}),
             ...form,
             staff_id: staffId,
+            submitted_at: new Date().toISOString(),
           },
-          { onConflict: 'store_id,staff_id,report_date' },
+          { onConflict: isEditing ? 'id' : 'store_id,staff_id,report_date' },
         );
         if (error) throw error;
       }

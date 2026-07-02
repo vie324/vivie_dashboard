@@ -57,6 +57,8 @@ export async function POST(
     highlights: body.highlights || null,
     challenges: body.challenges || null,
     next_actions: body.next_actions || null,
+    // 再提出時にも「いつ出したか」を最新化する (トリガーは updated_at しか更新しない)
+    submitted_at: new Date().toISOString(),
   };
   for (const k of numKeys) {
     payload[k] = Math.max(0, Number(body[k]) || 0);

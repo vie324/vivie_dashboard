@@ -35,26 +35,30 @@ export function PeriodTabs({
   );
 }
 
+// サロンは JST 運用のため、閲覧者のタイムゾーンに関わらず日本時間の暦日で期間を切る
+// (entry_date / report_date は JST 暦日で保存されている)。
 export function periodRange(p: PeriodKey): { from: string; to: string; label: string } {
-  const now = new Date();
-  const tz = now.getTimezoneOffset() * 60000;
-  const ymd = (d: Date) => new Date(d.getTime() - tz).toISOString().slice(0, 10);
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  // JST の壁時計をそのまま UTC フィールドとして持つ Date (getUTC* で JST の値が取れる)
+  const jstNow = new Date(Date.now() + JST_OFFSET_MS);
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
   if (p === 'today') {
-    return { from: ymd(now), to: ymd(now), label: '今日' };
+    return { from: ymd(jstNow), to: ymd(jstNow), label: '今日' };
   }
   if (p === 'week') {
-    const day = now.getDay();
-    const start = new Date(now);
-    start.setDate(now.getDate() - day);
-    return { from: ymd(start), to: ymd(now), label: '今週' };
+    const start = new Date(jstNow);
+    // 月曜始まり (日本のビジネス週)
+    const day = (start.getUTCDay() + 6) % 7;
+    start.setUTCDate(start.getUTCDate() - day);
+    return { from: ymd(start), to: ymd(jstNow), label: '今週' };
   }
   if (p === 'last_month') {
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    const start = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth() - 1, 1));
+    const end = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 0));
     return { from: ymd(start), to: ymd(end), label: '先月' };
   }
   // month (default)
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from: ymd(start), to: ymd(now), label: '今月' };
+  const start = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1));
+  return { from: ymd(start), to: ymd(jstNow), label: '今月' };
 }

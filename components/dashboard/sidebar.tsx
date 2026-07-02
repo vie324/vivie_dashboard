@@ -20,9 +20,10 @@ import {
   Sun,
   Target,
   Ticket,
-  CalendarDays,
   Scan,
   BarChart3,
+  LineChart,
+  Gem,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -54,7 +55,6 @@ const navGroups: NavGroup[] = [
     label: '顧客',
     items: [
       { href: '/members', label: '会員管理', icon: Users, storeAllowed: true },
-      { href: '/reservations', label: '予約', icon: CalendarDays, storeAllowed: true },
       { href: '/messages', label: 'LINE メッセージ', icon: MessageCircle, showBadge: true, storeAllowed: true },
       { href: '/counseling', label: 'カウンセリング', icon: ClipboardList, storeAllowed: true },
       { href: '/skin-analysis', label: '肌分析', icon: Scan, storeAllowed: true },
@@ -64,7 +64,9 @@ const navGroups: NavGroup[] = [
   {
     label: '売上 / 運営',
     items: [
+      { href: '/sales', label: '売上分析', icon: LineChart, managerOnly: true },
       { href: '/subscriptions', label: 'サブスク', icon: CreditCard },
+      { href: '/insights', label: '顧客インサイト', icon: Gem, managerOnly: true },
       { href: '/tickets', label: '回数券', icon: Ticket, storeAllowed: true },
       { href: '/cashbook', label: '出納帳', icon: Wallet, storeAllowed: true },
       { href: '/reports', label: '日報', icon: FileBarChart2 },
@@ -186,18 +188,21 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white transition-transform md:static md:translate-x-0 flex flex-col',
+          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-ink-100 bg-white/95 backdrop-blur transition-transform md:static md:translate-x-0 flex flex-col',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="flex items-center justify-between px-5 py-5 shrink-0">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/" className="group flex items-center gap-2.5">
             <LogoIcon size="sm" asImage />
-            <span
-              className="font-serif text-xl text-vivie-500"
-              style={{ letterSpacing: '0.12em' }}
-            >
-              vivie
+            <span className="flex flex-col">
+              <span
+                className="font-serif text-xl text-vivie-500 transition-colors group-hover:text-vivie-600"
+                style={{ letterSpacing: '0.14em' }}
+              >
+                vivie
+              </span>
+              <span className="gold-rule w-8" aria-hidden />
             </span>
           </Link>
           <button
@@ -209,10 +214,10 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-4">
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
           {visibleGroups.map((group) => (
             <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-400">
+              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600/80">
                 {group.label}
               </p>
               <ul className="space-y-0.5">
@@ -226,12 +231,18 @@ export function Sidebar({
                         href={item.href}
                         onClick={onClose}
                         className={cn(
-                          'flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors',
+                          'relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all duration-200',
                           active
-                            ? 'bg-vivie-50 text-vivie-700 font-medium'
-                            : 'text-ink-700 hover:bg-ink-50',
+                            ? 'bg-gradient-to-r from-vivie-50 to-transparent text-vivie-700 font-medium'
+                            : 'text-ink-700 hover:bg-ink-50 hover:translate-x-0.5',
                         )}
                       >
+                        {active && (
+                          <span
+                            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-gradient-to-b from-gold-400 to-vivie-400"
+                            aria-hidden
+                          />
+                        )}
                         <Icon size={16} className={active ? 'text-vivie-500' : 'text-ink-500'} />
                         <span className="flex-1">{item.label}</span>
                         {showBadge && (
