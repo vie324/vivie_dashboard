@@ -19,6 +19,14 @@
 
 > 予約管理は外部サービスで運用するため、このダッシュボードには含まれません。
 
+## デプロイ構成
+
+- **本番アプリは Vercel にデプロイされます** (main へのマージで自動デプロイ。`vercel.json` の
+  `"github": { "silent": true }` により GitHub 上には Vercel のチェックが表示されません)
+- GitHub Actions に表示される「pages build and deployment」は **GitHub Pages の自動ワークフロー**で、
+  本番アプリのデプロイとは無関係です (リポジトリのソースを Jekyll で静的公開しているだけの旧構成の名残)。
+  不要であれば Settings > Pages > Source を **None** にすると実行されなくなります
+
 ## 技術スタック
 
 - **Next.js 14** (App Router, Server Components, Server Actions)
